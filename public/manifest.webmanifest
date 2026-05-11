@@ -1,0 +1,24 @@
+{
+  "name": "Woodbank 현장 야장",
+  "short_name": "Woodbank",
+  "description": "목재 재감 구축 연구그룹 현장 채취 야장",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f3823",
+  "theme_color": "#235a3f",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
