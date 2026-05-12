@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getCurrentUserAndRole } from "@/lib/auth/role";
+import { DeleteEventButton } from "@/components/DeleteEventButton";
 import type { PhotoCategory } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +16,7 @@ const PHOTO_LABELS: Record<PhotoCategory, string> = {
 
 export default async function EventDetailPage({ params }: { params: { id: string } }) {
   const sb = getSupabaseServer();
+  const { role } = await getCurrentUserAndRole();
 
   const { data: event } = await sb
     .from("sampling_events")
@@ -23,13 +26,23 @@ export default async function EventDetailPage({ params }: { params: { id: string
         id, tree_local_no, species_code, lat, lon, lat_dms, lon_dms,
         elevation_m, aspect_deg, status,
         site:sites(id, code, region_sido, region_sigungu, address_detail, habitat_terrain)
-      ),
-      surveyor:users_meta!sampling_events_surveyor_id_fkey(display_name, organization)
+      )
     `)
     .eq("id", params.id)
     .maybeSingle();
 
   if (!event) notFound();
+
+  // 조사자 메타는 users_meta 가 auth.users 를 통해 간접 참조라 별도 조회
+  let surveyor: { display_name: string | null; organization: string | null } | null = null;
+  if (event.surveyor_id) {
+    const { data } = await sb
+      .from("users_meta")
+      .select("display_name, organization")
+      .eq("id", event.surveyor_id)
+      .maybeSingle();
+    surveyor = data ?? null;
+  }
 
   const { data: photos } = await sb
     .from("photos")
@@ -57,7 +70,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
 
   const tree = (event as any).tree;
   const site = tree?.site;
-  const surveyor = (event as any).surveyor;
 
   return (
     <div className="space-y-6">
@@ -78,8 +90,15 @@ export default async function EventDetailPage({ params }: { params: { id: string
         )}
       </div>
 
-      {/* 빠른 링크 */}
-      <div className="flex gap-2 flex-wrap">
+      {/* 액션 + 빠른 링크 */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <Link href={`/events/${event.id}/edit`} className="btn-secondary text-xs">
+          ✎ 수정
+        </Link>
+        {role === "admin" && (
+          <DeleteEventButton id={event.id} sampleNo={event.sample_no} />
+        )}
+        <div className="grow" />
         {site && (
           <Link href={`/sites/${site.id}`} className="btn-secondary text-xs">
             ← 지점: {site.code}
