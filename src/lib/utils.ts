@@ -3,6 +3,26 @@ export function cx(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
 }
 
+// "N 35° 15' 48.0\"" 같은 DMS 문자열을 십진수로 변환.
+// 부호: S/W → 음수, N/E → 양수. 방향이 없으면 양수로 간주.
+export function dmsToDecimal(dms: string): number | null {
+  if (!dms) return null;
+  const m = dms
+    .replace(/[°ºD]/g, " ")
+    .replace(/['′']/g, " ")
+    .replace(/["″"]/g, " ")
+    .match(/([NSEW])?\s*([+-]?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*(?:(\d+(?:\.\d+)?))?\s*([NSEW])?/i);
+  if (!m) return null;
+  const dir = (m[1] || m[5] || "").toUpperCase();
+  const deg = parseFloat(m[2]);
+  const min = parseFloat(m[3]);
+  const sec = m[4] ? parseFloat(m[4]) : 0;
+  if (isNaN(deg) || isNaN(min) || isNaN(sec)) return null;
+  let dd = Math.abs(deg) + min / 60 + sec / 3600;
+  if (deg < 0 || dir === "S" || dir === "W") dd = -dd;
+  return Number(dd.toFixed(7));
+}
+
 export function ddToDms(dd: number, isLat: boolean): string {
   const dir = isLat ? (dd >= 0 ? "N" : "S") : (dd >= 0 ? "E" : "W");
   const abs = Math.abs(dd);
