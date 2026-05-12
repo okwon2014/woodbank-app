@@ -20,10 +20,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between gap-3">
           <Link href="/sites" className="text-lg font-bold">Woodbank</Link>
           <div className="flex items-center gap-3">
-            <div className="text-xs opacity-90 text-right">
+            <Link href="/profile" className="text-xs opacity-90 text-right hover:underline">
               {displayName}
               <div className="uppercase tracking-wide opacity-70">{role}</div>
-            </div>
+            </Link>
             <LogoutButton />
           </div>
         </div>

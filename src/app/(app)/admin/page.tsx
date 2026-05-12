@@ -10,11 +10,12 @@ export default async function AdminPage() {
   if (role !== "admin") redirect("/sites");
 
   const sb = getSupabaseServer();
-  const [{ count: siteCount }, { count: treeCount }, { count: eventCount }, { count: photoCount }] = await Promise.all([
+  const [{ count: siteCount }, { count: treeCount }, { count: eventCount }, { count: photoCount }, { count: pendingCount }] = await Promise.all([
     sb.from("sites").select("*", { count: "exact", head: true }),
     sb.from("trees").select("*", { count: "exact", head: true }),
     sb.from("sampling_events").select("*", { count: "exact", head: true }),
     sb.from("photos").select("*", { count: "exact", head: true }),
+    sb.from("users_meta").select("*", { count: "exact", head: true }).eq("role", "guest"),
   ]);
 
   const { data: users } = await sb
@@ -38,6 +39,24 @@ export default async function AdminPage() {
         <StatCard label="Events" value={eventCount ?? 0} />
         <StatCard label="Photos" value={photoCount ?? 0} />
       </div>
+
+      {(pendingCount ?? 0) > 0 && (
+        <Link href="/admin/users" className="block">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 hover:bg-amber-100 transition">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-amber-900">
+                  🔔 역할 미배정 사용자 {pendingCount}명
+                </div>
+                <p className="text-xs text-amber-800 mt-1">
+                  가입은 됐지만 역할이 <code>guest</code>로 남아 있어 데이터 접근이 막혀 있습니다. 클릭하여 역할·지역을 부여하세요.
+                </p>
+              </div>
+              <div className="text-amber-700">→</div>
+            </div>
+          </div>
+        </Link>
+      )}
       <section>
         <h2 className="font-semibold mb-2">사용자</h2>
         <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">

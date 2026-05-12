@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 
@@ -82,13 +83,26 @@ function LoginContent() {
         <button type="submit" disabled={loading} className="btn-primary w-full">
           {loading ? "처리 중…" : mode === "password" ? "로그인" : "매직 링크 보내기"}
         </button>
-        <button
-          type="button"
-          onClick={() => setMode(mode === "password" ? "magic" : "password")}
-          className="text-xs text-stone-500 underline w-full text-center"
-        >
-          {mode === "password" ? "비밀번호 대신 매직 링크로 로그인" : "비밀번호 로그인으로 전환"}
-        </button>
+
+        <div className="flex items-center justify-between text-xs">
+          <button
+            type="button"
+            onClick={() => setMode(mode === "password" ? "magic" : "password")}
+            className="text-brand-700 underline"
+          >
+            {mode === "password" ? "🔗 매직 링크로 로그인" : "🔑 비밀번호 로그인"}
+          </button>
+          <Link href="/auth/reset-password" className="text-stone-500 underline">
+            비밀번호 잊으셨나요?
+          </Link>
+        </div>
+
+        {mode === "magic" && (
+          <p className="text-xs text-stone-500 bg-stone-50 p-2 rounded">
+            매직 링크는 비밀번호 없이 메일로 받은 링크를 클릭해 로그인하는 방식입니다. 비밀번호를 분실했을 때 백업 경로로도 사용할 수 있어요.
+          </p>
+        )}
+
         {msg && <p className="text-sm text-stone-700 bg-amber-50 p-2 rounded">{msg}</p>}
       </form>
     </div>

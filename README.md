@@ -126,6 +126,58 @@ woodbank-app/
 | 중간 | 한국어 행정구역 reverse geocoding | VWorld API 등 연동 |
 | 낮음 | DNA 분석 결과 테이블 + 업로드 | 별도 마이그레이션 |
 
+## 6.1 사용자 관리 강화 기능 셋업 (선택)
+
+다음 두 기능은 추가 환경변수가 필요합니다.
+
+### A. 관리자 초대 (메일로 가입 링크 발송)
+
+운영 도메인에서 `/admin/users` 페이지의 「+ 새 사용자 초대」가 동작하려면 service_role 키가 필요합니다.
+
+1. Supabase Dashboard → Project Settings → API → **service_role** 키 복사
+2. Vercel 프로젝트 → Settings → Environment Variables → 추가:
+   - `SUPABASE_SERVICE_ROLE_KEY` = 위에서 복사한 키 (**Production·Preview만 체크. Development 미체크 — 로컬 .env.local 사용**)
+   - `NEXT_PUBLIC_SITE_URL` = `https://woodbank-app.vercel.app` (본인 운영 도메인)
+3. Redeploy
+
+⚠️ service_role 키는 RLS를 우회하는 슈퍼유저 키입니다. 절대 클라이언트 코드나 Git에 노출 금지.
+
+### B. 신규 가입 시 admin 이메일 알림
+
+이메일은 외부 서비스 [Resend](https://resend.com) 무료 티어(3,000통/월)를 사용합니다.
+
+**1) Resend 셋업**
+
+1. resend.com 가입 → 좌측 **API Keys** → **Create API Key**
+2. (선택) 좌측 **Domains** → 본인 도메인 추가 + DNS 레코드 등록. 도메인 검증 안 하면 `onboarding@resend.dev`로만 발송 가능.
+
+**2) Vercel 환경변수**
+
+| 변수 | 값 |
+|---|---|
+| `RESEND_API_KEY` | Resend에서 발급받은 키 (`re_xxx...`) |
+| `ADMIN_NOTIFY_EMAILS` | 알림 받을 admin 이메일. 쉼표로 여러 명 가능 |
+| `RESEND_FROM_EMAIL` | (선택) 검증된 도메인이 있다면 `Woodbank <noreply@your.kr>` |
+| `WEBHOOK_SECRET` | 32자 이상 임의 문자열 (Supabase ↔ Vercel 간 검증용) |
+
+**3) Supabase Database Webhook 설정**
+
+Supabase Dashboard → **Database** → **Webhooks** → **Create new hook**
+
+| 항목 | 값 |
+|---|---|
+| Name | `notify-new-user` |
+| Table | `auth.users` |
+| Events | **Insert** 만 체크 |
+| Type | HTTP Request |
+| HTTP method | POST |
+| URL | `https://woodbank-app.vercel.app/api/webhooks/new-user` |
+| HTTP Headers | `X-Webhook-Secret`: 위 WEBHOOK_SECRET 과 동일 값 |
+
+Save. 이제 누군가 가입하면 admin이 자동으로 이메일을 받습니다.
+
+⚠️ Resend 미설정 시: 이메일은 안 가지만 `/admin` 대시보드에 「역할 미배정 사용자 N명」 노란 배너가 자동으로 떠서 인앱 알림은 항상 동작.
+
 ## 7. 트러블슈팅
 
 - **로그인은 되는데 sites 목록이 비어 있다** → `users_meta` 에 본인 role이 `guest` 인 상태. admin이 SQL로 역할 갱신 필요.
