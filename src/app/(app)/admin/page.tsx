@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -23,7 +24,10 @@ export default async function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold">관리자 대시보드</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">관리자 대시보드</h1>
+        <Link href="/admin/users" className="btn-primary">사용자 관리</Link>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="Sites" value={siteCount ?? 0} />
         <StatCard label="Trees" value={treeCount ?? 0} />

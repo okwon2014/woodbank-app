@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { ClickableThumbnail } from "@/components/PhotoLightbox";
 import type { PhotoCategory } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -57,16 +58,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
       return { ...p, signedUrl: data?.signedUrl ?? null };
     })
   );
-
-  const byCategory: Record<PhotoCategory, typeof photosWithUrl> = {
-    tree_form: [],
-    bark: [],
-    branch: [],
-    leaf_litter: [],
-  };
-  for (const p of photosWithUrl) {
-    byCategory[p.category as PhotoCategory]?.push(p);
-  }
 
   const tree = (event as any).tree;
   const site = tree?.site;
@@ -165,30 +156,31 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </section>
       )}
 
-      {/* 사진 */}
+      {/* 사진 — 클릭 시 라이트박스로 원본+EXIF 보기 */}
       <section>
         <h2 className="text-base font-bold text-brand-700 mb-3">사진</h2>
+        <p className="text-xs text-stone-500 mb-3">썸네일을 탭하면 원본 크기로 보고 좌/우 화살표로 넘길 수 있습니다.</p>
         <div className="grid grid-cols-2 gap-3">
           {(Object.keys(PHOTO_LABELS) as PhotoCategory[]).map((cat) => {
-            const list = byCategory[cat];
+            const indexed = photosWithUrl
+              .map((p, i) => ({ p, i }))
+              .filter(({ p }) => p.category === cat);
             return (
               <div key={cat} className="card">
                 <div className="text-sm font-semibold mb-2">{PHOTO_LABELS[cat]}</div>
-                {list.length === 0 ? (
+                {indexed.length === 0 ? (
                   <div className="aspect-square rounded-md bg-stone-100 flex items-center justify-center text-stone-400 text-xs">
                     없음
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {list.map((p) =>
+                    {indexed.map(({ p, i }) =>
                       p.signedUrl ? (
-                        <a key={p.id} href={p.signedUrl} target="_blank" rel="noreferrer">
-                          <img
-                            src={p.signedUrl}
-                            alt={PHOTO_LABELS[cat]}
-                            className="w-full aspect-square object-cover rounded-md"
-                          />
-                        </a>
+                        <ClickableThumbnail
+                          key={p.id}
+                          photos={photosWithUrl}
+                          index={i}
+                        />
                       ) : (
                         <div key={p.id} className="text-xs text-rose-600">이미지 로드 실패</div>
                       )

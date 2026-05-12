@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { EditEventForm } from "@/components/EditEventForm";
+import { PhotoEditor, type PhotoWithUrl } from "@/components/PhotoEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,31 @@ export default async function EditEventPage({ params }: { params: { id: string }
 
   if (!event) notFound();
 
+  const { data: photos } = await sb
+    .from("photos")
+    .select("id, category, storage_path, original_filename, width, height, bytes, exif_taken_at")
+    .eq("event_id", params.id)
+    .order("uploaded_at");
+
+  const photosWithUrl: PhotoWithUrl[] = await Promise.all(
+    (photos ?? []).map(async (p: any) => {
+      const { data } = await sb.storage.from("photos").createSignedUrl(p.storage_path, 900);
+      return {
+        id: p.id,
+        category: p.category,
+        storage_path: p.storage_path,
+        signedUrl: data?.signedUrl ?? null,
+        original_filename: p.original_filename,
+        width: p.width,
+        height: p.height,
+        bytes: p.bytes,
+        exif_taken_at: p.exif_taken_at,
+      };
+    })
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <Link href={`/events/${event.id}`} className="text-sm text-stone-500 hover:underline">
           ← 야장 상세로 돌아가기
@@ -35,6 +59,7 @@ export default async function EditEventPage({ params }: { params: { id: string }
           notes: event.notes,
         }}
       />
+      <PhotoEditor eventId={event.id} initialPhotos={photosWithUrl} />
     </div>
   );
 }

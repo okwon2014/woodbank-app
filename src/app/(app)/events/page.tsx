@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { EventFilters } from "@/components/EventFilters";
+import { PendingEvents } from "@/components/PendingEvents";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,8 @@ export default async function EventsListPage({ searchParams }: { searchParams: S
         <h1 className="text-xl font-bold">야장 목록</h1>
         <Link href="/events/new" className="btn-primary">+ 새 야장</Link>
       </div>
+
+      <PendingEvents />
 
       <Suspense fallback={null}>
         <EventFilters species={speciesOptions} regions={regionOptions} />

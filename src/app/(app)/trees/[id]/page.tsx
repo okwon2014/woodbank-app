@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +16,14 @@ export default async function TreeDetail({ params }: { params: { id: string } })
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">개체목 #{tree.tree_local_no}</h1>
-        <p className="text-sm text-stone-500">{tree.species_code} · {tree.lat?.toFixed(5)}, {tree.lon?.toFixed(5)}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">개체목 #{tree.tree_local_no}</h1>
+          <p className="text-sm text-stone-500">{tree.species_code} · {tree.lat?.toFixed(5)}, {tree.lon?.toFixed(5)}</p>
+        </div>
+        <Link href={`/trees/${tree.id}/edit`} className="btn-secondary text-xs shrink-0">
+          ✎ 수정
+        </Link>
       </div>
 
       <h2 className="font-semibold">채취 이력 ({events?.length ?? 0})</h2>
