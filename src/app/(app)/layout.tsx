@@ -5,7 +5,8 @@ import { LogoutButton } from "@/components/LogoutButton";
 
 const NAV = [
   { href: "/sites", label: "조사지점" },
-  { href: "/events/new", label: "야장 입력" },
+  { href: "/events", label: "야장 목록" },
+  { href: "/events/new", label: "+ 새 야장" },
   { href: "/queue", label: "동기화 큐" },
 ];
 

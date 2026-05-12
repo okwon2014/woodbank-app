@@ -27,8 +27,8 @@ const Schema = z.object({
   aspect_deg: z.number().int().min(0).max(359).nullable(),
   sample_no: z.string().min(3),
   sampled_at: z.string().min(10),
-  height_m: z.number().min(0).max(150),
-  dbh_cm: z.number().min(0).max(500),
+  height_m: z.number().min(0).max(150).nullable(),
+  dbh_cm: z.number().min(0).max(500).nullable(),
   dna_collected: z.boolean(),
   dna_sample_code: z.string().optional().default(""),
   notes: z.string().optional().default(""),
@@ -49,8 +49,8 @@ type State = {
   aspect_deg: number | null;
   sample_no: string;
   sampled_at: string;
-  height_m: number;
-  dbh_cm: number;
+  height_m: number | null;
+  dbh_cm: number | null;
   dna_collected: boolean;
   dna_sample_code: string;
   notes: string;
@@ -87,8 +87,8 @@ export function EventForm(props: Props) {
     aspect_deg: null,
     sample_no: "",
     sampled_at: nowIsoDate(),
-    height_m: 0,
-    dbh_cm: 0,
+    height_m: null,
+    dbh_cm: null,
     dna_collected: false,
     dna_sample_code: "",
     notes: "",
@@ -129,6 +129,8 @@ export function EventForm(props: Props) {
       if (state.lat == null || state.lon == null) {
         throw new Error("위치(위도/경도)를 먼저 가져오세요.");
       }
+      if (state.height_m == null) throw new Error("수고를 입력해주세요.");
+      if (state.dbh_cm == null) throw new Error("DBH(흉고직경)를 입력해주세요.");
 
       // 2) 현재 사용자
       const sb = getSupabaseBrowser();
@@ -365,9 +367,10 @@ export function EventForm(props: Props) {
             <input
               type="number"
               step="0.1"
+              inputMode="decimal"
               className="field-value"
-              value={state.height_m}
-              onChange={(e) => update("height_m", parseFloat(e.target.value) || 0)}
+              value={state.height_m ?? ""}
+              onChange={(e) => update("height_m", e.target.value === "" ? null : parseFloat(e.target.value))}
               placeholder="20"
             />
           </div>
@@ -376,9 +379,10 @@ export function EventForm(props: Props) {
             <input
               type="number"
               step="0.1"
+              inputMode="decimal"
               className="field-value"
-              value={state.dbh_cm}
-              onChange={(e) => update("dbh_cm", parseFloat(e.target.value) || 0)}
+              value={state.dbh_cm ?? ""}
+              onChange={(e) => update("dbh_cm", e.target.value === "" ? null : parseFloat(e.target.value))}
               placeholder="45.0"
             />
           </div>
