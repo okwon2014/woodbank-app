@@ -26,8 +26,9 @@ export default async function AdminPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-bold">관리자 대시보드</h1>
-        <div className="flex gap-2">
-          <Link href="/admin/import" className="btn-secondary">야장 일괄 등록</Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/admin/export" className="btn-secondary">📤 일괄 다운로드</Link>
+          <Link href="/admin/import" className="btn-secondary">📥 일괄 등록</Link>
           <Link href="/admin/users" className="btn-primary">사용자 관리</Link>
         </div>
       </div>

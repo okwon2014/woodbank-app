@@ -63,9 +63,22 @@ export default async function EventsListPage({ searchParams }: { searchParams: S
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-bold">야장 목록</h1>
-        <Link href="/events/new" className="btn-primary">+ 새 야장</Link>
+        <div className="flex gap-2">
+          <Link
+            href={`/admin/export${(() => {
+              const p = new URLSearchParams();
+              Object.entries(searchParams).forEach(([k, v]) => { if (v) p.set(k, String(v)); });
+              const s = p.toString();
+              return s ? `?${s}` : "";
+            })()}`}
+            className="btn-secondary text-sm"
+          >
+            📤 내보내기
+          </Link>
+          <Link href="/events/new" className="btn-primary">+ 새 야장</Link>
+        </div>
       </div>
 
       <PendingEvents />
