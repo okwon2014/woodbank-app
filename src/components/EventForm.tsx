@@ -7,6 +7,7 @@ import { GpsPicker } from "./GpsPicker";
 import { PhotoSlot, type StagedPhoto } from "./PhotoSlot";
 import { SpeciesPicker } from "./SpeciesPicker";
 import { PHOTO_QUALITY_LABELS, type PhotoQuality } from "@/lib/photo/compress";
+import { distanceMeters, validateMeasurements, type FieldWarning } from "@/lib/validation/event";
 import { ddToDms, nowIsoDate, uuidv7 } from "@/lib/utils";
 import { enqueueEvent, enqueuePhoto, blankPhotoPending } from "@/lib/db/queue";
 import { syncOnce } from "@/lib/sync/worker";
@@ -109,6 +110,8 @@ export function EventForm(props: Props) {
   const [geocodeMsg, setGeocodeMsg] = useState<string | null>(null);
   const [photoQuality, setPhotoQuality] = useState<PhotoQuality>("normal");
   const [sampleNoStatus, setSampleNoStatus] = useState<"idle" | "checking" | "ok" | "taken">("idle");
+  const [sigunguStatus, setSigunguStatus] = useState<"idle" | "ok" | "unknown">("idle");
+  const [nearbyTree, setNearbyTree] = useState<{ id: string; site_code: string; tree_local_no: string; dist: number } | null>(null);
 
   // 사진 품질 — localStorage 에 단말별로 기억
   useEffect(() => {
@@ -119,6 +122,74 @@ export function EventForm(props: Props) {
     setPhotoQuality(q);
     try { window.localStorage.setItem(PHOTO_QUALITY_LS_KEY, q); } catch {}
   }
+
+  // 시군구코드가 regions 마스터에 존재하는지 확인.
+  useEffect(() => {
+    const code = state.region_sigungu_code.trim();
+    if (!code) { setSigunguStatus("idle"); return; }
+    const t = setTimeout(async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const { data } = await sb
+          .from("regions")
+          .select("sigungu_code")
+          .eq("sigungu_code", code)
+          .maybeSingle();
+        setSigunguStatus(data ? "ok" : "unknown");
+      } catch {
+        setSigunguStatus("idle");
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [state.region_sigungu_code]);
+
+  // 같은 site 안에서 가까운 (5 m 이내) 다른 개체목이 있는지. 중복 등록 예방.
+  useEffect(() => {
+    const lat = state.lat;
+    const lon = state.lon;
+    const siteCode = state.site_code;
+    const treeNo = state.tree_local_no;
+    if (lat == null || lon == null || !siteCode) { setNearbyTree(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const delta = 0.0005; // ≈ 55 m bbox 로 사전 필터, 정확 거리 계산은 client
+        const { data } = await sb
+          .from("trees")
+          .select("id, tree_local_no, lat, lon, sites!inner(code)")
+          .eq("sites.code", siteCode)
+          .gte("lat", lat - delta)
+          .lte("lat", lat + delta)
+          .gte("lon", lon - delta)
+          .lte("lon", lon + delta)
+          .limit(50);
+        const hits = ((data as any[]) ?? [])
+          .filter((r) => r.lat != null && r.lon != null)
+          .map((r) => ({
+            id: r.id,
+            site_code: r.sites?.code ?? siteCode,
+            tree_local_no: r.tree_local_no,
+            dist: distanceMeters({ lat, lon }, { lat: r.lat, lon: r.lon }),
+          }))
+          .filter((r) => r.dist < 5 && r.tree_local_no !== treeNo)
+          .sort((a, b) => a.dist - b.dist);
+        setNearbyTree(hits[0] ?? null);
+      } catch {
+        setNearbyTree(null);
+      }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [state.lat, state.lon, state.site_code, state.tree_local_no]);
+
+  // 측정값 이상치(클라이언트 즉시 검증).
+  const measurementWarnings: FieldWarning[] = validateMeasurements({
+    height_m: state.height_m,
+    dbh_cm: state.dbh_cm,
+    elevation_m: state.elevation_m,
+    aspect_deg: state.aspect_deg,
+    lat: state.lat,
+    lon: state.lon,
+  });
 
   // sample_no DB 중복 체크 (디바운스). 같은 입력에 대해 1회만 fetch.
   useEffect(() => {
@@ -401,6 +472,14 @@ export function EventForm(props: Props) {
             onChange={(e) => update("region_sigungu_code", e.target.value)}
             placeholder="46710"
           />
+          {sigunguStatus === "unknown" && state.region_sigungu_code && (
+            <p className="text-xs text-amber-800 mt-1">
+              ⚠️ 시군구 코드 「{state.region_sigungu_code}」가 regions 마스터에서 확인되지 않습니다. 오타이거나 마스터가 비어 있을 수 있어요.
+            </p>
+          )}
+          {sigunguStatus === "ok" && (
+            <p className="text-xs text-emerald-700 mt-1">✓ 시군구 코드 확인됨.</p>
+          )}
         </div>
         <div>
           <span className="field-label">장소 상세</span>
@@ -467,6 +546,23 @@ export function EventForm(props: Props) {
           </div>
         </div>
       </section>
+
+      {nearbyTree && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          🌳 동일 지점({nearbyTree.site_code})에 매우 가까운(약 {nearbyTree.dist.toFixed(1)} m) 개체목 #{nearbyTree.tree_local_no} 가 이미 등록되어 있습니다.
+          같은 나무를 다시 등록하는 게 아닌지 확인해 주세요.
+        </div>
+      )}
+
+      {measurementWarnings.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
+          {measurementWarnings.map((w) => (
+            <p key={w.field} className={`text-xs ${w.severity === "error" ? "text-rose-800" : "text-amber-900"}`}>
+              {w.severity === "error" ? "⛔" : "⚠️"} {w.message}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* 수종·계측 */}
       <section className="card space-y-3">

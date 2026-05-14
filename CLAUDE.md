@@ -117,5 +117,6 @@ public/{sw.js, manifest.webmanifest, icons/}
 
 - 새 기능 → 가능하면 `(app)` 그룹 안에. 인증 미들웨어가 자동 적용됨.
 - 새 admin 전용 화면 → `(app)/admin/` 아래. 페이지 상단에서 `await requireRole(["admin"])` (또는 lead 포함). RLS도 이중으로 보장.
+- 새 입력 폼 → 이상치 안내가 필요한 측정값(수고/DBH/고도/방위 등)이면 [src/lib/validation/event.ts](src/lib/validation/event.ts)의 검증을 활용하거나 같은 패턴으로 추가. 입력은 막지 말고 **안내(warn)** 만.
 - 새 마이그레이션 → 번호 순서대로, 가능하면 `if not exists` / `drop ... if exists`로 재실행 안전하게.
 - 동기화 큐 페이로드 형태 변경 시 → 기존 큐에 남아 있는 항목이 깨질 수 있음. payload에 `version` 필드 두는 것이 안전.
