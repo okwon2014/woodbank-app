@@ -47,6 +47,8 @@ export function SitesMapView({ markers }: Props) {
   const [ready, setReady] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [drawnMarkerCount, setDrawnMarkerCount] = useState(0);
+  const [cursor, setCursor] = useState<{ lat: number; lon: number; zoom: number } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -82,6 +84,15 @@ export function SitesMapView({ markers }: Props) {
           if (onResize) onResize();
           setReady(true);
         });
+
+        // 마우스 위치의 GPS · 현재 zoom 을 toolbar 옆에 실시간 표시
+        map.on("mousemove", (e) => {
+          setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng, zoom: map.getZoom() });
+        });
+        map.on("mouseout", () => setCursor(null));
+        map.on("zoom", () => {
+          setCursor((prev) => (prev ? { ...prev, zoom: map.getZoom() } : prev));
+        });
       } catch (e: any) {
         setError(e?.message ?? "지도 라이브러리 로드 실패");
       }
@@ -101,10 +112,12 @@ export function SitesMapView({ markers }: Props) {
   useEffect(() => {
     const map = mapRef.current;
     const lib = libRef.current;
-    if (!map || !lib) return;
+    // ready 가 의존성에 있어야 map.once("load") 후 effect 가 재실행되어 마커가 그려진다.
+    if (!map || !lib || !ready) return;
 
     const layoutMarkers = () => {
       document.querySelectorAll(".wb-tree-marker").forEach((el) => el.remove());
+      setDrawnMarkerCount(0);
       if (markers.length === 0) return;
 
       const bounds = new lib.LngLatBounds();
@@ -176,14 +189,12 @@ export function SitesMapView({ markers }: Props) {
         // 너무 멀리 zoom out 되지 않게 maxZoom 약간 낮춤.
         map.fitBounds(bounds, { padding: { top: 80, right: 60, bottom: 60, left: 60 }, maxZoom: 16, duration: 600 });
       }
+      // 실제로 DOM 에 들어간 마커 카운트 — toolbar 의 badge 와 비교해 진단.
+      setDrawnMarkerCount(document.querySelectorAll(".wb-tree-marker").length);
     };
 
-    if (map.loaded()) {
-      layoutMarkers();
-    } else {
-      map.once("load", layoutMarkers);
-    }
-  }, [markers, router]);
+    layoutMarkers();
+  }, [markers, ready, showLabels, router]);
 
   async function exportImage() {
     const map = mapRef.current;
@@ -288,7 +299,7 @@ export function SitesMapView({ markers }: Props) {
         className="w-full rounded-xl border border-stone-200 overflow-hidden bg-stone-100"
       />
 
-      {/* 상단 toolbar — 이미지 저장 / 라벨 토글 */}
+      {/* 상단 toolbar — 이미지 저장 / 라벨 토글 / 마커 카운트 */}
       {!error && (
         <div className="absolute top-3 left-3 flex items-center gap-2 bg-white/95 rounded-lg shadow border border-stone-200 px-2 py-1.5 text-xs">
           <button
@@ -308,6 +319,25 @@ export function SitesMapView({ markers }: Props) {
             />
             마커 라벨
           </label>
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono ${
+              drawnMarkerCount === markers.length
+                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                : "bg-rose-50 text-rose-800 border border-rose-200"
+            }`}
+            title="화면에 실제로 그려진 빨간 마커 수 / 데이터로 전달된 좌표 수"
+          >
+            🔴 {drawnMarkerCount}/{markers.length}
+          </span>
+        </div>
+      )}
+
+      {/* 우하단 — 마우스 위치 GPS · 현재 zoom 실시간 표시 */}
+      {!error && (
+        <div className="absolute right-3 bottom-12 bg-white/95 rounded-md shadow border border-stone-200 px-2.5 py-1 text-[11px] font-mono text-stone-700 pointer-events-none">
+          {cursor
+            ? `${cursor.lat.toFixed(5)}, ${cursor.lon.toFixed(5)} · z${cursor.zoom.toFixed(2)}`
+            : "지도 위로 마우스를 옮기면 좌표가 표시됩니다"}
         </div>
       )}
 
