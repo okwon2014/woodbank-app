@@ -14,8 +14,9 @@ interface SearchParams {
   q?: string;
 }
 
-export default async function EventsListPage({ searchParams }: { searchParams: SearchParams }) {
-  const sb = getSupabaseServer();
+export default async function EventsListPage(props: { searchParams: Promise<SearchParams> }) {
+  const searchParams = await props.searchParams;
+  const sb = await getSupabaseServer();
 
   // 1) 필터용 마스터 (수종·시군구) — 캐시할 가치 있지만 일단 단순 조회
   const [{ data: species }, { data: regions }] = await Promise.all([

@@ -25,8 +25,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js').catch(() => {});
+                window.addEventListener('load', async () => {
+                  try {
+                    const reg = await navigator.serviceWorker.register('/sw.js');
+                    // Background Sync (Chromium 계열). 지원 안 되면 silently skip.
+                    if (reg && 'sync' in reg && typeof reg.sync.register === 'function') {
+                      try { await reg.sync.register('woodbank-sync'); } catch (_) {}
+                    }
+                  } catch (_) {}
+                });
+                // SW 가 sync 이벤트에서 보낸 메시지 수신 → 큐 동기화 트리거
+                navigator.serviceWorker.addEventListener('message', (e) => {
+                  if (e.data && e.data.type === 'woodbank-sync-now') {
+                    window.dispatchEvent(new CustomEvent('woodbank:sync-now'));
+                  }
                 });
               }
             `,

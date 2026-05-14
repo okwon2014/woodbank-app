@@ -5,8 +5,9 @@ import { EditTreeForm } from "@/components/EditTreeForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditTreePage({ params }: { params: { id: string } }) {
-  const sb = getSupabaseServer();
+export default async function EditTreePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const sb = await getSupabaseServer();
   const { data: tree } = await sb
     .from("trees")
     .select("id, tree_local_no, species_code, lat, lon, elevation_m, aspect_deg, status, tag_id")

@@ -8,7 +8,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export async function POST(req: Request) {
   try {
     // 1) 호출자 인증·역할 확인
-    const sb = getSupabaseServer();
+    const sb = await getSupabaseServer();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

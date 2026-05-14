@@ -15,11 +15,13 @@
 ## 1. Supabase 프로젝트 만들기
 
 1. <https://supabase.com> 에 가입 후 **New Project** — Region은 `Northeast Asia (Seoul, ap-northeast-2)` 권장.
-2. 프로젝트가 만들어지면 좌측 메뉴 **SQL Editor**를 열고, 아래 4개 파일을 **순서대로** 복사·실행:
+2. 프로젝트가 만들어지면 좌측 메뉴 **SQL Editor**를 열고, 아래 파일을 **순서대로** 복사·실행:
    1. `supabase/migrations/001_schema.sql`
    2. `supabase/migrations/002_rls.sql`
    3. `supabase/migrations/003_storage_and_triggers.sql`
    4. `supabase/migrations/004_seed.sql`
+   5. `supabase/migrations/005_admin_helpers.sql`
+   6. `supabase/migrations/006_dna_results.sql`
 3. **Storage** → `photos` 버킷이 생성되었는지 확인. (003 스크립트가 자동 생성)
 4. **Project Settings → API** 에서 다음 두 값을 복사:
    - `Project URL` → `.env.local` 의 `NEXT_PUBLIC_SUPABASE_URL`
@@ -117,14 +119,16 @@ woodbank-app/
 
 ## 6. 다음 단계 권장
 
-| 우선순위 | 항목 | 비고 |
+| 우선순위 | 항목 | 상태 / 비고 |
 |---|---|---|
-| 높음 | RLS 회귀 테스트 (pgTAP) | 외부 협력자가 다른 Site를 못 보는지 등 검증 |
-| 높음 | 사용자 추가/역할 변경 UI | 현재 admin은 SQL로 직접 수정 |
-| 중간 | MapLibre 지도 뷰 | `/sites?view=map` |
-| 중간 | CSV/Excel 내보내기 | `/api/export` 라우트 + Service Role |
-| 중간 | 한국어 행정구역 reverse geocoding | VWorld API 등 연동 |
-| 낮음 | DNA 분석 결과 테이블 + 업로드 | 별도 마이그레이션 |
+| 높음 | RLS 회귀 테스트 (pgTAP) | ✅ [supabase/tests/rls/01_rls_smoke.sql](supabase/tests/rls/01_rls_smoke.sql) — 실행 방법은 [docs/OPERATIONS.md §6](docs/OPERATIONS.md) |
+| 높음 | 사용자 추가/역할 변경 UI | ✅ `/admin/users` 구현 완료 |
+| 높음 | 오프라인 동기화 안정성 | ✅ 재시도 상한·지수 백오프·서버 충돌 감지 ([CLAUDE.md](CLAUDE.md) 「오프라인 동기화 흐름」) |
+| 높음 | 역할 가드 일관화 + 403 페이지 | ✅ `requireRole()` + `/forbidden` ([src/lib/auth/guard.ts](src/lib/auth/guard.ts)) |
+| 중간 | MapLibre 지도 뷰 | ✅ `/sites?view=map` — OSM 타일 + 개체목 마커, 클릭 시 상세로 이동 |
+| 중간 | CSV 내보내기 | ✅ UTF-8(BOM) CSV — [src/lib/export/csv.ts](src/lib/export/csv.ts) |
+| 중간 | 한국어 행정구역 reverse geocoding | ✅ VWorld(키 있을 때) + OSM Nominatim fallback — [src/lib/geocode/reverse.ts](src/lib/geocode/reverse.ts), `/events/new` 의 「좌표로 주소 채우기」 |
+| 낮음 | DNA 분석 결과 테이블 + 업로드 | ✅ `dna_results` 테이블 + `dna` Storage 버킷 + 야장 상세 화면 인라인 관리 UI (admin/lead). 마이그레이션 [006](supabase/migrations/006_dna_results.sql) |
 
 ## 6.1 사용자 관리 강화 기능 셋업 (선택)
 

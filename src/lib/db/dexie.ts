@@ -34,6 +34,9 @@ export interface QueueRow {
   retries: number;
   last_error: string | null;
   queued_at: string;
+  // 지수 백오프: 다음 자동 재시도 가능 시각. null이면 즉시 가능.
+  // retries >= MAX_RETRIES일 때 worker가 명시적으로 null로 두고 자동 재시도를 중단한다.
+  next_retry_at?: string | null;
 }
 
 class WoodbankDB extends Dexie {

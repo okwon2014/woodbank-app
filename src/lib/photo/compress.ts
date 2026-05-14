@@ -1,18 +1,36 @@
-// 사진 압축 — 최대 1600px, 85% JPEG
+// 사진 압축. 품질 프리셋 3종 — 단말 저장공간·업로드 용량과 디테일 사이의 균형.
 "use client";
 
 import imageCompression from "browser-image-compression";
 
-export async function compressImage(file: File): Promise<Blob> {
-  const options = {
-    maxSizeMB: 1.5,
-    maxWidthOrHeight: 1600,
-    initialQuality: 0.85,
+export type PhotoQuality = "fast" | "normal" | "high";
+
+interface CompressOption {
+  maxSizeMB: number;
+  maxWidthOrHeight: number;
+  initialQuality: number;
+}
+
+const PRESETS: Record<PhotoQuality, CompressOption> = {
+  fast:   { maxSizeMB: 0.4, maxWidthOrHeight: 800,  initialQuality: 0.75 },
+  normal: { maxSizeMB: 1.5, maxWidthOrHeight: 1600, initialQuality: 0.85 },
+  high:   { maxSizeMB: 4,   maxWidthOrHeight: 2400, initialQuality: 0.9 },
+};
+
+export const PHOTO_QUALITY_LABELS: Record<PhotoQuality, string> = {
+  fast: "빠름(800px·저용량)",
+  normal: "보통(1600px)",
+  high: "고화질(2400px)",
+};
+
+export async function compressImage(file: File, quality: PhotoQuality = "normal"): Promise<Blob> {
+  const p = PRESETS[quality];
+  return imageCompression(file, {
+    ...p,
     useWebWorker: true,
     fileType: "image/jpeg" as const,
     alwaysKeepResolution: false,
-  };
-  return imageCompression(file, options);
+  });
 }
 
 export async function sha256OfBlob(blob: Blob): Promise<string | null> {

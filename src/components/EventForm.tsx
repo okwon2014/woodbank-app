@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { GpsPicker } from "./GpsPicker";
 import { PhotoSlot, type StagedPhoto } from "./PhotoSlot";
 import { SpeciesPicker } from "./SpeciesPicker";
+import { PHOTO_QUALITY_LABELS, type PhotoQuality } from "@/lib/photo/compress";
+import { distanceMeters, validateMeasurements, type FieldWarning } from "@/lib/validation/event";
 import { ddToDms, nowIsoDate, uuidv7 } from "@/lib/utils";
 import { enqueueEvent, enqueuePhoto, blankPhotoPending } from "@/lib/db/queue";
 import { syncOnce } from "@/lib/sync/worker";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import type { PhotoCategory, SamplingEvent, Site, Tree } from "@/types/db";
+
+const PHOTO_QUALITY_LS_KEY = "woodbank.photoQuality";
 
 const Schema = z.object({
   site_code: z.string().min(3),
@@ -102,16 +106,180 @@ export function EventForm(props: Props) {
   const [gpsAcc, setGpsAcc] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeMsg, setGeocodeMsg] = useState<string | null>(null);
+  const [photoQuality, setPhotoQuality] = useState<PhotoQuality>("normal");
+  const [sampleNoStatus, setSampleNoStatus] = useState<"idle" | "checking" | "ok" | "taken">("idle");
+  const [sigunguStatus, setSigunguStatus] = useState<"idle" | "ok" | "unknown">("idle");
+  const [nearbyTree, setNearbyTree] = useState<{ id: string; site_code: string; tree_local_no: string; dist: number } | null>(null);
+
+  // 사진 품질 — localStorage 에 단말별로 기억
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(PHOTO_QUALITY_LS_KEY) : null;
+    if (saved === "fast" || saved === "normal" || saved === "high") setPhotoQuality(saved);
+  }, []);
+  function changePhotoQuality(q: PhotoQuality) {
+    setPhotoQuality(q);
+    try { window.localStorage.setItem(PHOTO_QUALITY_LS_KEY, q); } catch {}
+  }
+
+  // 시군구코드가 regions 마스터에 존재하는지 확인.
+  useEffect(() => {
+    const code = state.region_sigungu_code.trim();
+    if (!code) { setSigunguStatus("idle"); return; }
+    const t = setTimeout(async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const { data } = await sb
+          .from("regions")
+          .select("sigungu_code")
+          .eq("sigungu_code", code)
+          .maybeSingle();
+        setSigunguStatus(data ? "ok" : "unknown");
+      } catch {
+        setSigunguStatus("idle");
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [state.region_sigungu_code]);
+
+  // 같은 site 안에서 가까운 (5 m 이내) 다른 개체목이 있는지. 중복 등록 예방.
+  useEffect(() => {
+    const lat = state.lat;
+    const lon = state.lon;
+    const siteCode = state.site_code;
+    const treeNo = state.tree_local_no;
+    if (lat == null || lon == null || !siteCode) { setNearbyTree(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const delta = 0.0005; // ≈ 55 m bbox 로 사전 필터, 정확 거리 계산은 client
+        const { data } = await sb
+          .from("trees")
+          .select("id, tree_local_no, lat, lon, sites!inner(code)")
+          .eq("sites.code", siteCode)
+          .gte("lat", lat - delta)
+          .lte("lat", lat + delta)
+          .gte("lon", lon - delta)
+          .lte("lon", lon + delta)
+          .limit(50);
+        const hits = ((data as any[]) ?? [])
+          .filter((r) => r.lat != null && r.lon != null)
+          .map((r) => ({
+            id: r.id,
+            site_code: r.sites?.code ?? siteCode,
+            tree_local_no: r.tree_local_no,
+            dist: distanceMeters({ lat, lon }, { lat: r.lat, lon: r.lon }),
+          }))
+          .filter((r) => r.dist < 5 && r.tree_local_no !== treeNo)
+          .sort((a, b) => a.dist - b.dist);
+        setNearbyTree(hits[0] ?? null);
+      } catch {
+        setNearbyTree(null);
+      }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [state.lat, state.lon, state.site_code, state.tree_local_no]);
+
+  // 측정값 이상치(클라이언트 즉시 검증).
+  const measurementWarnings: FieldWarning[] = validateMeasurements({
+    height_m: state.height_m,
+    dbh_cm: state.dbh_cm,
+    elevation_m: state.elevation_m,
+    aspect_deg: state.aspect_deg,
+    lat: state.lat,
+    lon: state.lon,
+  });
+
+  // sample_no DB 중복 체크 (디바운스). 같은 입력에 대해 1회만 fetch.
+  useEffect(() => {
+    const sn = state.sample_no.trim();
+    if (!sn || sn.length < 3) { setSampleNoStatus("idle"); return; }
+    setSampleNoStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const { data, error } = await sb
+          .from("sampling_events")
+          .select("id")
+          .eq("sample_no", sn)
+          .limit(1)
+          .maybeSingle();
+        if (error) { setSampleNoStatus("idle"); return; }
+        setSampleNoStatus(data ? "taken" : "ok");
+      } catch {
+        setSampleNoStatus("idle");
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [state.sample_no]);
 
   // 입력값 변화 helper
   function update<K extends keyof State>(k: K, v: State[K]) {
     setState((s) => ({ ...s, [k]: v }));
   }
 
-  // sample_no 자동 추천
-  function suggestSampleNo() {
+  // 현재 lat/lon 으로 주소(시도/시군구/시군구코드/장소상세) 자동 채우기.
+  // 비어 있는 필드만 채워서 사용자가 손으로 적어둔 값은 보존한다.
+  async function fillAddressFromCoords() {
+    if (state.lat == null || state.lon == null) {
+      setGeocodeMsg("먼저 위치를 가져오세요.");
+      return;
+    }
+    setGeocoding(true);
+    setGeocodeMsg(null);
+    try {
+      const res = await fetch(`/api/geocode/reverse?lat=${state.lat}&lon=${state.lon}`);
+      if (!res.ok) throw new Error(`주소 조회 실패 (${res.status})`);
+      const j = await res.json();
+      const filled: string[] = [];
+      setState((s) => {
+        const next = { ...s };
+        if (!s.region_sido && j.sido) { next.region_sido = j.sido; filled.push("시도"); }
+        if (!s.region_sigungu && j.sigungu) { next.region_sigungu = j.sigungu; filled.push("시군구"); }
+        if (!s.region_sigungu_code && j.sigungu_code) { next.region_sigungu_code = j.sigungu_code; filled.push("시군구코드"); }
+        if (!s.address_detail && j.address_detail) { next.address_detail = j.address_detail; filled.push("장소 상세"); }
+        return next;
+      });
+      const src = j.source === "vworld" ? "VWorld" : j.source === "nominatim" ? "OSM Nominatim" : "(소스 없음)";
+      setGeocodeMsg(
+        filled.length > 0
+          ? `${src}에서 ${filled.join(" · ")}를 채웠습니다.`
+          : `${src} 조회 완료 — 비어 있는 필드가 없어 변경하지 않았습니다.`,
+      );
+    } catch (e: any) {
+      setGeocodeMsg(e?.message ?? "주소 조회 실패");
+    } finally {
+      setGeocoding(false);
+    }
+  }
+
+  // sample_no 자동 추천 — 같은 site_code 안에서 마지막 번호 + 1 을 추천.
+  // 서버에서 like 'site_code_%' 인 sample_no 를 가져와 끝의 정수만 추출.
+  async function suggestSampleNo() {
     if (!state.site_code) return;
-    const padded = state.tree_local_no.padStart(2, "0");
+    let nextNum = parseInt(state.tree_local_no, 10) || 1;
+    try {
+      const sb = getSupabaseBrowser();
+      const { data } = await sb
+        .from("sampling_events")
+        .select("sample_no")
+        .like("sample_no", `${state.site_code}\\_%`)
+        .order("sample_no", { ascending: false })
+        .limit(20);
+      // 마지막 _뒤의 정수 부분 (예: "2025_담양_03-2" 에서 3)
+      const nums = (data ?? [])
+        .map((r: { sample_no: string }) => {
+          const m = r.sample_no.match(/_(\d+)(?:-\d+)?$/);
+          return m ? parseInt(m[1], 10) : NaN;
+        })
+        .filter((n: number) => !Number.isNaN(n));
+      if (nums.length > 0) nextNum = Math.max(...nums) + 1;
+    } catch {
+      // 오프라인이면 클라이언트 값 기준
+    }
+    const padded = String(nextNum).padStart(2, "0");
+    update("tree_local_no", padded);
     update("sample_no", `${state.site_code}_${padded}`);
   }
 
@@ -244,6 +412,12 @@ export function EventForm(props: Props) {
                 자동
               </button>
             </div>
+            {sampleNoStatus === "taken" && (
+              <p className="text-xs text-rose-700 mt-1">⚠️ 같은 채취번호가 이미 서버에 있습니다. 자동 충돌로 표시될 수 있어요.</p>
+            )}
+            {sampleNoStatus === "ok" && (
+              <p className="text-xs text-emerald-700 mt-1">✓ 사용 가능한 채취번호입니다.</p>
+            )}
           </div>
           <div>
             <span className="field-label">채취일</span>
@@ -298,6 +472,14 @@ export function EventForm(props: Props) {
             onChange={(e) => update("region_sigungu_code", e.target.value)}
             placeholder="46710"
           />
+          {sigunguStatus === "unknown" && state.region_sigungu_code && (
+            <p className="text-xs text-amber-800 mt-1">
+              ⚠️ 시군구 코드 「{state.region_sigungu_code}」가 regions 마스터에서 확인되지 않습니다. 오타이거나 마스터가 비어 있을 수 있어요.
+            </p>
+          )}
+          {sigunguStatus === "ok" && (
+            <p className="text-xs text-emerald-700 mt-1">✓ 시군구 코드 확인됨.</p>
+          )}
         </div>
         <div>
           <span className="field-label">장소 상세</span>
@@ -330,6 +512,17 @@ export function EventForm(props: Props) {
             setGpsAcc(v.accuracy);
           }}
         />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={fillAddressFromCoords}
+            disabled={geocoding || state.lat == null || state.lon == null}
+          >
+            {geocoding ? "주소 조회 중…" : "🏷 좌표로 주소 채우기"}
+          </button>
+          {geocodeMsg && <span className="text-xs text-stone-600">{geocodeMsg}</span>}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="field-label">해발고 (m)</span>
@@ -353,6 +546,23 @@ export function EventForm(props: Props) {
           </div>
         </div>
       </section>
+
+      {nearbyTree && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          🌳 동일 지점({nearbyTree.site_code})에 매우 가까운(약 {nearbyTree.dist.toFixed(1)} m) 개체목 #{nearbyTree.tree_local_no} 가 이미 등록되어 있습니다.
+          같은 나무를 다시 등록하는 게 아닌지 확인해 주세요.
+        </div>
+      )}
+
+      {measurementWarnings.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
+          {measurementWarnings.map((w) => (
+            <p key={w.field} className={`text-xs ${w.severity === "error" ? "text-rose-800" : "text-amber-900"}`}>
+              {w.severity === "error" ? "⛔" : "⚠️"} {w.message}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* 수종·계측 */}
       <section className="card space-y-3">
@@ -412,7 +622,25 @@ export function EventForm(props: Props) {
 
       {/* 사진 */}
       <section className="space-y-2">
-        <h2 className="text-base font-bold text-brand-700">사진 (4종)</h2>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-base font-bold text-brand-700">사진 (4종)</h2>
+          <label className="text-xs text-stone-600 inline-flex items-center gap-1">
+            품질
+            <select
+              className="text-xs border border-stone-300 rounded px-1.5 py-0.5 bg-white"
+              value={photoQuality}
+              onChange={(e) => changePhotoQuality(e.target.value as PhotoQuality)}
+            >
+              {(Object.keys(PHOTO_QUALITY_LABELS) as PhotoQuality[]).map((q) => (
+                <option key={q} value={q}>{PHOTO_QUALITY_LABELS[q]}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="text-[11px] text-stone-500">
+          데이터 요금/저장공간이 부족하면 「빠름」으로, 정밀 식별이 중요한 잎/낙엽은 「고화질」로 권장.
+          선택은 단말에 저장되어 다음 야장에도 적용됩니다.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           {(Object.keys(PHOTO_LABELS) as PhotoCategory[]).map((cat) => (
             <PhotoSlot
@@ -421,6 +649,7 @@ export function EventForm(props: Props) {
               label={PHOTO_LABELS[cat]}
               value={photos[cat]}
               onChange={(p) => setPhotos((prev) => ({ ...prev, [cat]: p }))}
+              quality={photoQuality}
             />
           ))}
         </div>

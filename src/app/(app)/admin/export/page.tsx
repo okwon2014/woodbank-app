@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getCurrentUserAndRole } from "@/lib/auth/role";
+import { requireRole } from "@/lib/auth/guard";
 import { fetchEventsForExport } from "@/lib/export/fetch";
 import { ExportControls } from "@/components/ExportControls";
 
@@ -8,9 +7,9 @@ export const dynamic = "force-dynamic";
 
 interface SP { species?: string; sigungu?: string; from?: string; to?: string; q?: string }
 
-export default async function ExportPage({ searchParams }: { searchParams: SP }) {
-  const { role } = await getCurrentUserAndRole();
-  if (role !== "admin" && role !== "lead") redirect("/sites");
+export default async function ExportPage(props: { searchParams: Promise<SP> }) {
+  const searchParams = await props.searchParams;
+  await requireRole(["admin", "lead"]);
 
   const events = await fetchEventsForExport(searchParams);
 

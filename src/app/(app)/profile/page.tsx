@@ -5,7 +5,7 @@ import { ProfileForm } from "@/components/ProfileForm";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
-  const sb = getSupabaseServer();
+  const sb = await getSupabaseServer();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) redirect("/login");
 

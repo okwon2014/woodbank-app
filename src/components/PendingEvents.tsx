@@ -13,8 +13,9 @@ export function PendingEvents() {
   async function refresh() {
     if (typeof window === "undefined") return;
     try {
+      // queued/conflict만 표시. draft(사용자가 큐에서 명시적으로 뺀 항목)·synced는 제외.
       const list = await db().sampling_events
-        .where("sync_status").notEqual("synced").toArray();
+        .where("sync_status").anyOf("queued", "conflict").toArray();
       setPending(list);
     } catch {
       // Dexie 미초기화·SSR 등의 경우 무시

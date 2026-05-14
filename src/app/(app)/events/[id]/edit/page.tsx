@@ -6,8 +6,9 @@ import { PhotoEditor, type PhotoWithUrl } from "@/components/PhotoEditor";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditEventPage({ params }: { params: { id: string } }) {
-  const sb = getSupabaseServer();
+export default async function EditEventPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const sb = await getSupabaseServer();
   const { data: event } = await sb
     .from("sampling_events")
     .select("id, sample_no, sampled_at, height_m, dbh_cm, dna_collected, dna_sample_code, notes")

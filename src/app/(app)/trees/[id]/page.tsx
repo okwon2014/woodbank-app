@@ -3,8 +3,9 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function TreeDetail({ params }: { params: { id: string } }) {
-  const sb = getSupabaseServer();
+export default async function TreeDetail(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const sb = await getSupabaseServer();
   const { data: tree } = await sb.from("trees").select("*").eq("id", params.id).maybeSingle();
   if (!tree) return <p>개체목을 찾을 수 없습니다.</p>;
 

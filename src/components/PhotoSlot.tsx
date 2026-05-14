@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { compressImage, readImageDimensions, sha256OfBlob } from "@/lib/photo/compress";
+import { compressImage, readImageDimensions, sha256OfBlob, type PhotoQuality } from "@/lib/photo/compress";
 import { readExif } from "@/lib/photo/exif";
 import type { PhotoCategory } from "@/types/db";
 import { uuidv7 } from "@/lib/utils";
@@ -26,9 +26,10 @@ interface Props {
   label: string;
   value: StagedPhoto | null;
   onChange: (p: StagedPhoto | null) => void;
+  quality?: PhotoQuality;
 }
 
-export function PhotoSlot({ category, label, value, onChange }: Props) {
+export function PhotoSlot({ category, label, value, onChange, quality = "normal" }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export function PhotoSlot({ category, label, value, onChange }: Props) {
     setBusy(true);
     setErr(null);
     try {
-      const [compressed, exif] = await Promise.all([compressImage(file), readExif(file)]);
+      const [compressed, exif] = await Promise.all([compressImage(file, quality), readExif(file)]);
       const dims = await readImageDimensions(compressed);
       const sha = await sha256OfBlob(compressed);
       const previewUrl = URL.createObjectURL(compressed);

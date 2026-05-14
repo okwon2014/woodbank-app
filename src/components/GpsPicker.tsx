@@ -72,6 +72,27 @@ export function GpsPicker({ value, onChange }: Props) {
           {value.accuracy != null && <> · ±{Math.round(value.accuracy)} m</>}
         </p>
       )}
+      {value.accuracy != null && value.accuracy > 30 && (
+        <div
+          className={`text-xs rounded p-2 ${
+            value.accuracy > 100
+              ? "bg-rose-50 border border-rose-200 text-rose-800"
+              : "bg-amber-50 border border-amber-200 text-amber-900"
+          }`}
+        >
+          {value.accuracy > 100 ? (
+            <>
+              ⚠️ GPS 정확도가 매우 낮습니다 (±{Math.round(value.accuracy)} m). 야외 개활지로 이동해
+              다시 측정하거나, 위/경도를 손으로 입력하세요.
+            </>
+          ) : (
+            <>
+              GPS 정확도가 다소 낮습니다 (±{Math.round(value.accuracy)} m). 가능하면 야외 개활지에서
+              다시 측정하세요.
+            </>
+          )}
+        </div>
+      )}
       <div className="flex gap-2">
         <button type="button" onClick={locate} disabled={busy} className="btn-secondary text-xs">
           {busy ? "측정 중…" : "📍 현재 위치 가져오기"}

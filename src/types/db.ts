@@ -71,6 +71,23 @@ export interface PhotoMeta {
   uploaded_at: string;
 }
 
+export interface DnaResult {
+  id: string;
+  event_id: string;
+  analysis_type: string | null;
+  identification_result: string | null;
+  similarity_score: number | null;
+  analyst: string | null;
+  analyzed_at: string | null; // ISO date
+  file_storage_path: string | null;
+  file_original_name: string | null;
+  file_bytes: number | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Species {
   code: string;
   ko_name: string;

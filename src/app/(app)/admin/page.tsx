@@ -1,15 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getCurrentUserAndRole } from "@/lib/auth/role";
+import { requireRole } from "@/lib/auth/guard";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const { role } = await getCurrentUserAndRole();
-  if (role !== "admin") redirect("/sites");
+  await requireRole(["admin"]);
 
-  const sb = getSupabaseServer();
+  const sb = await getSupabaseServer();
   const [{ count: siteCount }, { count: treeCount }, { count: eventCount }, { count: photoCount }, { count: pendingCount }] = await Promise.all([
     sb.from("sites").select("*", { count: "exact", head: true }),
     sb.from("trees").select("*", { count: "exact", head: true }),

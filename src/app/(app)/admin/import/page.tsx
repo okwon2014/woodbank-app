@@ -1,13 +1,11 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUserAndRole } from "@/lib/auth/role";
+import { requireRole } from "@/lib/auth/guard";
 import { BulkImporter } from "@/components/BulkImporter";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminImportPage() {
-  const { role } = await getCurrentUserAndRole();
-  if (role !== "admin" && role !== "lead") redirect("/sites");
+  await requireRole(["admin", "lead"]);
 
   return (
     <div className="space-y-4">

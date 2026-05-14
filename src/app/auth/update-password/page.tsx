@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 export default function UpdatePasswordPage() {
   const router = useRouter();
@@ -17,11 +18,13 @@ export default function UpdatePasswordPage() {
   // Supabase는 비밀번호 복구 링크를 클릭하면 PASSWORD_RECOVERY 이벤트로 세션을 만든다.
   useEffect(() => {
     const sb = getSupabaseBrowser();
-    const { data: { subscription } } = sb.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange((event: AuthChangeEvent, _session: Session | null) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
     });
     // 이미 세션 있는 경우도 대응 (페이지 직접 방문)
-    sb.auth.getSession().then(({ data }) => { if (data.session) setReady(true); });
+    sb.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
+      if (data.session) setReady(true);
+    });
     return () => subscription.unsubscribe();
   }, []);
 
