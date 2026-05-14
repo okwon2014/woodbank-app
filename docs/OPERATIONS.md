@@ -12,6 +12,7 @@
 6. [RLS 회귀 테스트(pgTAP)](#6-rls-회귀-테스트pgtap)
 7. [백업·복구](#7-백업복구)
 8. [장애 대응 체크리스트](#8-장애-대응-체크리스트)
+9. [의존성 보안](#9-의존성-보안)
 
 ---
 
@@ -176,3 +177,24 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | "서버 충돌" 빨간 배지 | Postgres unique·check 제약 위반(예: `sample_no` 중복). 같은 페이로드로 재시도해도 또 실패. 채취번호를 고친 새 야장으로 다시 저장하거나, 충돌 항목은 [큐에서 제거] |
 | PWA 설치 안 됨 | HTTPS 필요. Vercel 도메인에서 시도. `public/icons/*.png` 존재 확인 |
 | 사진은 올라갔는데 표시 안 됨 | `photos.storage_path`와 Storage 객체 경로 일치 여부, RLS `photos_read` |
+
+## 9. 의존성 보안
+
+`npm audit` 으로 정기적으로 확인합니다. 현재 알려진 잔여 advisory와 처리 방침:
+
+| 패키지 | 등급 | 내용 | 처리 |
+|---|---|---|---|
+| `next@14.2.x` | high | 14.x 라인에서는 패치되지 않는 advisory 일부 잔존(메이저 15/16 에서 fix) | 별도 PR 로 메이저 업그레이드 검토. App Router·`@supabase/ssr`·`next.config.mjs` 호환성 점검 필요 |
+| `xlsx@0.18.x` | high | sheetJS 의 prototype pollution / ReDoS — 공식 npm 배포가 0.18.5 에서 멈춤 | `exceljs` 등으로 교체하는 별도 PR. 영향 코드: [src/lib/export/excel.ts](../src/lib/export/excel.ts) |
+| `postcss` (transient via next) | moderate | XSS via unescaped `</style>` | Next 메이저 업그레이드 시 함께 해결 |
+
+업그레이드 절차:
+
+```bash
+npm outdated                  # 어떤 패키지가 뒤처져 있는지
+npm install <pkg>@<ver>       # 명시 버전으로
+npm audit                     # 잔여 advisory 확인
+npm run typecheck && npm run build
+```
+
+> ⚠️ `npm audit fix --force` 는 메이저 업그레이드를 강행해 호환성을 깰 수 있습니다. 항상 명시 버전으로 단계적 업그레이드 + 빌드/QA 후 머지하세요.
