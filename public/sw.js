@@ -1,13 +1,23 @@
 /* Woodbank PWA service worker
- * - 정적 자산 캐싱 (cache-first)
- * - API/Supabase 호출은 네트워크 통과 (오프라인 큐는 IndexedDB 측에서 처리)
+ * 전략
+ *  - precache: app shell(/, manifest, icons) — install 시 미리 받아둔다.
+ *  - navigation(HTML): stale-while-revalidate — 즉시 캐시 응답 + 백그라운드 갱신.
+ *  - 동일 origin asset(JS·CSS·이미지): cache-first.
+ *  - Supabase·API·POST: 캐시 안 함, 네트워크 그대로.
+ *  - 오프라인 + 캐시 없음 fallback: 마지막에 캐시된 / 문서.
+ *  - Background Sync API ('woodbank-sync'): 가능한 환경에서 클라이언트에
+ *    메시지를 보내 IndexedDB 큐 동기화를 트리거한다.
+ *
+ * 새 버전 배포 시 VERSION 을 올리면 이전 캐시를 모두 제거한다.
  */
-const CACHE = "woodbank-v1";
-const ASSETS = ["/", "/manifest.webmanifest"];
+const VERSION = "v2-2026-05";
+const STATIC_CACHE = `wb-static-${VERSION}`;
+const NAV_CACHE = `wb-nav-${VERSION}`;
+const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).catch(() => {})
+    caches.open(STATIC_CACHE).then((c) => c.addAll(PRECACHE)).catch(() => {})
   );
   self.skipWaiting();
 });
@@ -15,36 +25,84 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+      Promise.all(
+        keys
+          .filter((k) => k !== STATIC_CACHE && k !== NAV_CACHE)
+          .map((k) => caches.delete(k)),
+      ),
+    ),
   );
   self.clients.claim();
 });
+
+function isSupabaseOrApi(url, req) {
+  return (
+    req.method !== "GET" ||
+    url.pathname.startsWith("/api/") ||
+    url.hostname.includes("supabase.co") ||
+    url.hostname.endsWith("supabase.in") ||
+    // 외부 지도 타일, signed URL 등은 따로 캐싱 안 함
+    url.hostname.includes("tile.openstreetmap.org") ||
+    url.hostname.includes("nominatim.openstreetmap.org") ||
+    url.hostname.includes("api.vworld.kr")
+  );
+}
+
+async function staleWhileRevalidate(cacheName, req) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(req);
+  const fetchPromise = fetch(req)
+    .then((res) => {
+      if (res.ok && new URL(req.url).origin === self.location.origin) {
+        cache.put(req, res.clone());
+      }
+      return res;
+    })
+    .catch(() => null);
+  return cached || (await fetchPromise) || cache.match("/") || Response.error();
+}
+
+async function cacheFirst(cacheName, req) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(req);
+  if (cached) return cached;
+  try {
+    const res = await fetch(req);
+    if (res.ok && new URL(req.url).origin === self.location.origin) {
+      cache.put(req, res.clone());
+    }
+    return res;
+  } catch {
+    return cached || Response.error();
+  }
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Supabase·API·POST 등은 캐싱하지 않고 네트워크 사용
-  if (
-    req.method !== "GET" ||
-    url.pathname.startsWith("/api/") ||
-    url.hostname.includes("supabase.co")
-  ) {
+  if (isSupabaseOrApi(url, req)) return;
+
+  // HTML 네비게이션은 SWR — 즉시 응답 + 백그라운드 갱신
+  if (req.mode === "navigate" || req.destination === "document") {
+    event.respondWith(staleWhileRevalidate(NAV_CACHE, req));
     return;
   }
+  // 그 외 같은 origin 자산은 cache-first
+  if (url.origin === self.location.origin) {
+    event.respondWith(cacheFirst(STATIC_CACHE, req));
+  }
+});
 
-  // 정적 자산: cache-first, fallback network
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        if (res.ok && url.origin === self.location.origin) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached);
-    })
+// Background Sync API — 'online' 복귀 시 OS 가 트리거. 지원 환경(Chromium 계열)에서만.
+// SW 안에서 Supabase·Dexie 를 직접 호출하긴 어려우므로, 활성 클라이언트에 메시지를
+// 보내 페이지 측의 syncOnce() 가 동작하도록 깨운다.
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "woodbank-sync") return;
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ includeUncontrolled: true });
+      for (const c of clients) c.postMessage({ type: "woodbank-sync-now" });
+    })(),
   );
 });

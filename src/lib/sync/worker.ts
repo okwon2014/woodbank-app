@@ -106,12 +106,21 @@ export function installAutoSync() {
   if (typeof window === "undefined") return;
   const fire = () => syncOnce().catch(() => {});
   window.addEventListener("online", fire);
+  // SW 의 Background Sync 가 깨운 알림
+  window.addEventListener("woodbank:sync-now", fire as EventListener);
+  // 페이지가 포그라운드로 돌아올 때 한 번 시도
+  const onVis = () => {
+    if (document.visibilityState === "visible" && navigator.onLine) fire();
+  };
+  document.addEventListener("visibilitychange", onVis);
   // 5분 주기
   const t = window.setInterval(fire, 5 * 60 * 1000);
   // 초기 시도
   if (navigator.onLine) setTimeout(fire, 1500);
   return () => {
     window.removeEventListener("online", fire);
+    window.removeEventListener("woodbank:sync-now", fire as EventListener);
+    document.removeEventListener("visibilitychange", onVis);
     window.clearInterval(t);
   };
 }
