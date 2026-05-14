@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { downloadExcel } from "@/lib/export/excel";
 import { downloadDocx } from "@/lib/export/docx";
+import { downloadCsv } from "@/lib/export/csv";
 import type { EventExport } from "@/lib/export/types";
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export function ExportControls({ events, printHref }: Props) {
-  const [busy, setBusy] = useState<"" | "excel" | "docx" | "pdf">("");
+  const [busy, setBusy] = useState<"" | "excel" | "csv" | "docx" | "pdf">("");
   const [progress, setProgress] = useState<string>("");
 
   const ts = new Date().toISOString().slice(0, 10);
@@ -26,6 +27,18 @@ export function ExportControls({ events, printHref }: Props) {
       alert(e?.message ?? "Excel 생성 실패");
     } finally {
       setBusy(""); setProgress("");
+    }
+  }
+
+  function onCsv() {
+    if (events.length === 0) return alert("내보낼 항목이 없습니다.");
+    setBusy("csv");
+    try {
+      downloadCsv(events, `woodbank_${ts}.csv`);
+    } catch (e: any) {
+      alert(e?.message ?? "CSV 생성 실패");
+    } finally {
+      setBusy("");
     }
   }
 
@@ -73,7 +86,9 @@ export function ExportControls({ events, printHref }: Props) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div />
+        <button onClick={onCsv} disabled={disabled} className="btn-secondary text-xs">
+          {busy === "csv" ? "생성 중…" : "📋 CSV (UTF-8 BOM)"}
+        </button>
         <button onClick={() => onDocx(false)} disabled={disabled} className="btn-secondary text-xs">
           Word (사진 없이 빠르게)
         </button>
@@ -90,6 +105,7 @@ export function ExportControls({ events, printHref }: Props) {
         <summary className="cursor-pointer">각 포맷 안내</summary>
         <ul className="list-disc pl-5 mt-2 space-y-1">
           <li><b>Excel</b>: 한 행 = 한 시료. 모든 필드 + 사진 수. 데이터 분석·필터링에 적합.</li>
+          <li><b>CSV</b>: 동일 컬럼을 UTF-8(BOM 포함) CSV 로. R·Python·DB import 에 적합. 한글이 깨지면 Excel 에서 「데이터 → 외부 데이터 가져오기」로 UTF-8 지정.</li>
           <li><b>Word (사진 포함)</b>: 첨부 PDF와 동일한 1샘플 1페이지 양식. 사진 크기는 110×110px로 자동 축소. N건이 많으면 시간이 걸립니다.</li>
           <li><b>Word (사진 없이)</b>: 텍스트 필드만. 즉시 완료.</li>
           <li><b>PDF</b>: 새 탭으로 인쇄 뷰가 열립니다. 브라우저 메뉴에서 「인쇄 → PDF로 저장」 선택. macOS에서 가장 깔끔. 사진은 Storage signed URL로 직접 렌더.</li>
