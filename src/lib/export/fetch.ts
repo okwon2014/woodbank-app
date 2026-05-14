@@ -10,7 +10,7 @@ export interface ExportFilter {
 }
 
 export async function fetchEventsForExport(filter: ExportFilter): Promise<EventExport[]> {
-  const sb = getSupabaseServer();
+  const sb = await getSupabaseServer();
 
   let q = sb
     .from("sampling_events")

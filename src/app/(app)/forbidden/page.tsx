@@ -14,11 +14,12 @@ function label(role: string) {
   return ROLE_LABEL[role] ?? role;
 }
 
-export default function ForbiddenPage({
-  searchParams,
-}: {
-  searchParams: { need?: string; have?: string };
-}) {
+export default async function ForbiddenPage(
+  props: {
+    searchParams: Promise<{ need?: string; have?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const need = (searchParams.need ?? "").split(",").filter(Boolean);
   const have = searchParams.have ?? "guest";
 

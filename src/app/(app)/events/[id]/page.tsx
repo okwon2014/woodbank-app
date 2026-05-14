@@ -16,8 +16,9 @@ const PHOTO_LABELS: Record<PhotoCategory, string> = {
   leaf_litter: "잎/낙엽",
 };
 
-export default async function EventDetailPage({ params }: { params: { id: string } }) {
-  const sb = getSupabaseServer();
+export default async function EventDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const sb = await getSupabaseServer();
   const { role } = await getCurrentUserAndRole();
 
   const { data: event } = await sb

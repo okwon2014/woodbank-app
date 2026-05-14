@@ -2,7 +2,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/db";
 
 export async function getCurrentUserAndRole() {
-  const supabase = getSupabaseServer();
+  const supabase = await getSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { user: null, role: "guest" as UserRole };
 

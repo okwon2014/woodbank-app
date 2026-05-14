@@ -4,11 +4,14 @@
 
 ## 스택 요약
 
-- **프론트**: Next.js 14 (App Router, server components) + Tailwind + TypeScript strict
-- **백엔드**: Supabase (Postgres + Auth + Storage + RLS)
+- **프론트**: Next.js 15 (App Router, server components) + React 19 + Tailwind + TypeScript strict
+- **백엔드**: Supabase (Postgres + Auth + Storage + RLS) — `@supabase/ssr` 0.10.x
 - **오프라인**: PWA + Service Worker + Dexie(IndexedDB) 동기화 큐
-- **사진**: `browser-image-compression`(1600px·85% JPEG) + `exifr`
+- **사진/스프레드시트**: `browser-image-compression`(1600px·85% JPEG) + `exifr` + `exceljs`
+- **지도**: `maplibre-gl` (OSM 타일)
 - **배포**: Vercel (`output: 'export'` 아님 — Node 서버 필요)
+
+> **Next 15 비동기 Request API 주의** — `cookies()`, `headers()`, 페이지의 `params`/`searchParams` 는 모두 Promise. 서버 컴포넌트/route handler 에서 항상 `await`. 헬퍼 `getSupabaseServer()` 도 async, 호출 시 `const sb = await getSupabaseServer();`
 
 ## 자주 쓰는 명령
 

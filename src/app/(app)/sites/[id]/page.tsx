@@ -3,8 +3,9 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function SiteDetail({ params }: { params: { id: string } }) {
-  const sb = getSupabaseServer();
+export default async function SiteDetail(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const sb = await getSupabaseServer();
   const { data: site } = await sb.from("sites").select("*").eq("id", params.id).maybeSingle();
   const { data: trees } = await sb
     .from("trees")

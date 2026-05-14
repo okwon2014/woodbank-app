@@ -187,8 +187,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 
 | 패키지 | 등급 | 내용 | 처리 |
 |---|---|---|---|
-| `next@14.2.x` | high | 14.x 라인에서는 패치되지 않는 advisory 일부 잔존(메이저 15/16 에서 fix) | 별도 PR 로 메이저 업그레이드 검토. App Router·`@supabase/ssr`·`next.config.mjs` 호환성 점검 필요 |
-| `postcss` (transient via next) | moderate | XSS via unescaped `</style>` | Next 메이저 업그레이드 시 함께 해결 |
+| `postcss` (transient via next) | moderate | XSS via unescaped `</style>` | Next 내부 종속이라 직접 업그레이드 불가. PostCSS 가 사용자 입력을 CSS string 으로 만들지 않으므로 실질 위험은 낮음. Next 차기 패치 대기 |
 
 업그레이드 절차:
 

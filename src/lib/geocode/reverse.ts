@@ -99,7 +99,7 @@ async function fromNominatim(lat: number, lon: number): Promise<ReverseGeocodeRe
 
 async function lookupSigunguCode(sido: string, sigungu: string): Promise<string | null> {
   try {
-    const sb = getSupabaseServer();
+    const sb = await getSupabaseServer();
     // 정확 매칭 우선
     const { data: exact } = await sb
       .from("regions")

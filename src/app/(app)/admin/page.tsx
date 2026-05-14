@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   await requireRole(["admin"]);
 
-  const sb = getSupabaseServer();
+  const sb = await getSupabaseServer();
   const [{ count: siteCount }, { count: treeCount }, { count: eventCount }, { count: photoCount }, { count: pendingCount }] = await Promise.all([
     sb.from("sites").select("*", { count: "exact", head: true }),
     sb.from("trees").select("*", { count: "exact", head: true }),

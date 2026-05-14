@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 interface SP { species?: string; sigungu?: string; from?: string; to?: string; q?: string }
 
-export default async function ExportPage({ searchParams }: { searchParams: SP }) {
+export default async function ExportPage(props: { searchParams: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   await requireRole(["admin", "lead"]);
 
   const events = await fetchEventsForExport(searchParams);

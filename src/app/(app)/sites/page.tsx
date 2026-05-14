@@ -8,8 +8,9 @@ interface SP {
   view?: "list" | "map";
 }
 
-export default async function SitesPage({ searchParams }: { searchParams: SP }) {
-  const sb = getSupabaseServer();
+export default async function SitesPage(props: { searchParams: Promise<SP> }) {
+  const searchParams = await props.searchParams;
+  const sb = await getSupabaseServer();
   const view = searchParams.view === "map" ? "map" : "list";
 
   return (
@@ -40,7 +41,7 @@ export default async function SitesPage({ searchParams }: { searchParams: SP }) 
   );
 }
 
-async function ListView({ sb }: { sb: ReturnType<typeof getSupabaseServer> }) {
+async function ListView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServer>> }) {
   const { data: sites, error } = await sb
     .from("sites")
     .select("id, code, region_sigungu, address_detail, updated_at")
@@ -74,7 +75,7 @@ async function ListView({ sb }: { sb: ReturnType<typeof getSupabaseServer> }) {
   );
 }
 
-async function MapView({ sb }: { sb: ReturnType<typeof getSupabaseServer> }) {
+async function MapView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServer>> }) {
   // 권한 내(RLS 통과) trees + 사이트·수종 조인. lat/lon 없는 행은 제외.
   const { data: trees, error } = await sb
     .from("trees")
