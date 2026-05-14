@@ -11,3 +11,5 @@ coverage/
 tests/e2e/.results/
 playwright-report/
 test-results/
+# Claude Code 내부 상태
+.claude/scheduled_tasks.lock
