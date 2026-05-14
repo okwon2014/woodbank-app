@@ -117,14 +117,16 @@ woodbank-app/
 
 ## 6. 다음 단계 권장
 
-| 우선순위 | 항목 | 비고 |
+| 우선순위 | 항목 | 상태 / 비고 |
 |---|---|---|
-| 높음 | RLS 회귀 테스트 (pgTAP) | 외부 협력자가 다른 Site를 못 보는지 등 검증 |
-| 높음 | 사용자 추가/역할 변경 UI | 현재 admin은 SQL로 직접 수정 |
-| 중간 | MapLibre 지도 뷰 | `/sites?view=map` |
-| 중간 | CSV/Excel 내보내기 | `/api/export` 라우트 + Service Role |
-| 중간 | 한국어 행정구역 reverse geocoding | VWorld API 등 연동 |
-| 낮음 | DNA 분석 결과 테이블 + 업로드 | 별도 마이그레이션 |
+| 높음 | RLS 회귀 테스트 (pgTAP) | ✅ [supabase/tests/rls/01_rls_smoke.sql](supabase/tests/rls/01_rls_smoke.sql) — 실행 방법은 [docs/OPERATIONS.md §6](docs/OPERATIONS.md) |
+| 높음 | 사용자 추가/역할 변경 UI | ✅ `/admin/users` 구현 완료 |
+| 높음 | 오프라인 동기화 안정성 | ✅ 재시도 상한·지수 백오프·서버 충돌 감지 ([CLAUDE.md](CLAUDE.md) 「오프라인 동기화 흐름」) |
+| 높음 | 역할 가드 일관화 + 403 페이지 | ✅ `requireRole()` + `/forbidden` ([src/lib/auth/guard.ts](src/lib/auth/guard.ts)) |
+| 중간 | MapLibre 지도 뷰 | 미구현 — `/sites?view=map` |
+| 중간 | CSV 내보내기 | 미구현 (현재 xlsx/docx/PDF 인쇄뷰만 — [src/lib/export/](src/lib/export/)) |
+| 중간 | 한국어 행정구역 reverse geocoding | 미구현 — VWorld API 등 연동 |
+| 낮음 | DNA 분석 결과 테이블 + 업로드 | 부분 — 필드는 있고 결과 업로드 미구현 |
 
 ## 6.1 사용자 관리 강화 기능 셋업 (선택)
 
