@@ -58,7 +58,16 @@ export function SitesMapView({ markers }: Props) {
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
     mapRef.current = map;
 
+    // 컨테이너 크기가 늦게 잡히는 경우(레이아웃 시프트·폰트 로드 등) 캔버스가
+    // 0×0 으로 굳지 않도록 resize 안전망. 첫 load 후 한 번 + 윈도우 resize 마다.
+    const onResize = () => map.resize();
+    const t = setTimeout(onResize, 100);
+    window.addEventListener("resize", onResize);
+    map.once("load", onResize);
+
     return () => {
+      window.removeEventListener("resize", onResize);
+      clearTimeout(t);
       map.remove();
       mapRef.current = null;
     };
@@ -119,7 +128,13 @@ export function SitesMapView({ markers }: Props) {
 
   return (
     <div className="relative">
-      <div ref={containerRef} className="w-full h-[calc(100vh-200px)] min-h-[400px] rounded-xl border border-stone-200 overflow-hidden" />
+      {/* Tailwind arbitrary value 의 calc() 공백 제약을 피하기 위해 inline style 로 지정.
+          헤더(약 110px) + 페이지 패딩·툴바를 뺀 viewport 높이. 모바일 대응 min-height. */}
+      <div
+        ref={containerRef}
+        style={{ height: "calc(100vh - 200px)", minHeight: 400 }}
+        className="w-full rounded-xl border border-stone-200 overflow-hidden bg-stone-100"
+      />
       {markers.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-white/90 rounded-lg px-4 py-2 text-sm text-stone-700 shadow">
