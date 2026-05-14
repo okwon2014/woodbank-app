@@ -2,11 +2,13 @@
 
 「재감 시료 채취 야장」을 모바일에서 즉시 기록하고, 오프라인에서도 안전하게 저장 후 자동 동기화하는 PWA 풀스택 스캐폴드입니다. 구성 결정 배경과 권한·데이터 모델 세부는 동봉된 `목재재감DB_구축계획서_v1.0.docx`를 참고하세요.
 
+> **🧪 내부 베타 진행 중 (v0.1)** — 시험에 참여하시는 분은 [docs/BETA.md](docs/BETA.md) 를 먼저 읽어주세요. 알려진 한계 · 골든 패스 · 피드백 채널이 모두 적혀 있습니다.
+
 ## 0. 한눈에 보기
 
 | | |
 |---|---|
-| 프론트엔드 | Next.js 14 (App Router) + Tailwind |
+| 프론트엔드 | Next.js 15 (App Router) + React 19 + Tailwind |
 | 백엔드 | Supabase (PostgreSQL + Auth + Storage + RLS) |
 | 오프라인 | PWA + Dexie(IndexedDB) 큐 + 클라이언트 사진 압축(1600px·85% JPEG) |
 | 권한 | 5단계 역할(`admin / lead / surveyor / collaborator / guest`) RLS |
