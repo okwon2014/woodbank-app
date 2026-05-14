@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { GpsPicker } from "./GpsPicker";
 import { PhotoSlot, type StagedPhoto } from "./PhotoSlot";
 import { SpeciesPicker } from "./SpeciesPicker";
+import { PHOTO_QUALITY_LABELS, type PhotoQuality } from "@/lib/photo/compress";
 import { ddToDms, nowIsoDate, uuidv7 } from "@/lib/utils";
 import { enqueueEvent, enqueuePhoto, blankPhotoPending } from "@/lib/db/queue";
 import { syncOnce } from "@/lib/sync/worker";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import type { PhotoCategory, SamplingEvent, Site, Tree } from "@/types/db";
+
+const PHOTO_QUALITY_LS_KEY = "woodbank.photoQuality";
 
 const Schema = z.object({
   site_code: z.string().min(3),
@@ -104,6 +107,41 @@ export function EventForm(props: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeMsg, setGeocodeMsg] = useState<string | null>(null);
+  const [photoQuality, setPhotoQuality] = useState<PhotoQuality>("normal");
+  const [sampleNoStatus, setSampleNoStatus] = useState<"idle" | "checking" | "ok" | "taken">("idle");
+
+  // 사진 품질 — localStorage 에 단말별로 기억
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(PHOTO_QUALITY_LS_KEY) : null;
+    if (saved === "fast" || saved === "normal" || saved === "high") setPhotoQuality(saved);
+  }, []);
+  function changePhotoQuality(q: PhotoQuality) {
+    setPhotoQuality(q);
+    try { window.localStorage.setItem(PHOTO_QUALITY_LS_KEY, q); } catch {}
+  }
+
+  // sample_no DB 중복 체크 (디바운스). 같은 입력에 대해 1회만 fetch.
+  useEffect(() => {
+    const sn = state.sample_no.trim();
+    if (!sn || sn.length < 3) { setSampleNoStatus("idle"); return; }
+    setSampleNoStatus("checking");
+    const t = setTimeout(async () => {
+      try {
+        const sb = getSupabaseBrowser();
+        const { data, error } = await sb
+          .from("sampling_events")
+          .select("id")
+          .eq("sample_no", sn)
+          .limit(1)
+          .maybeSingle();
+        if (error) { setSampleNoStatus("idle"); return; }
+        setSampleNoStatus(data ? "taken" : "ok");
+      } catch {
+        setSampleNoStatus("idle");
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [state.sample_no]);
 
   // 입력값 변화 helper
   function update<K extends keyof State>(k: K, v: State[K]) {
@@ -145,10 +183,32 @@ export function EventForm(props: Props) {
     }
   }
 
-  // sample_no 자동 추천
-  function suggestSampleNo() {
+  // sample_no 자동 추천 — 같은 site_code 안에서 마지막 번호 + 1 을 추천.
+  // 서버에서 like 'site_code_%' 인 sample_no 를 가져와 끝의 정수만 추출.
+  async function suggestSampleNo() {
     if (!state.site_code) return;
-    const padded = state.tree_local_no.padStart(2, "0");
+    let nextNum = parseInt(state.tree_local_no, 10) || 1;
+    try {
+      const sb = getSupabaseBrowser();
+      const { data } = await sb
+        .from("sampling_events")
+        .select("sample_no")
+        .like("sample_no", `${state.site_code}\\_%`)
+        .order("sample_no", { ascending: false })
+        .limit(20);
+      // 마지막 _뒤의 정수 부분 (예: "2025_담양_03-2" 에서 3)
+      const nums = (data ?? [])
+        .map((r: { sample_no: string }) => {
+          const m = r.sample_no.match(/_(\d+)(?:-\d+)?$/);
+          return m ? parseInt(m[1], 10) : NaN;
+        })
+        .filter((n: number) => !Number.isNaN(n));
+      if (nums.length > 0) nextNum = Math.max(...nums) + 1;
+    } catch {
+      // 오프라인이면 클라이언트 값 기준
+    }
+    const padded = String(nextNum).padStart(2, "0");
+    update("tree_local_no", padded);
     update("sample_no", `${state.site_code}_${padded}`);
   }
 
@@ -281,6 +341,12 @@ export function EventForm(props: Props) {
                 자동
               </button>
             </div>
+            {sampleNoStatus === "taken" && (
+              <p className="text-xs text-rose-700 mt-1">⚠️ 같은 채취번호가 이미 서버에 있습니다. 자동 충돌로 표시될 수 있어요.</p>
+            )}
+            {sampleNoStatus === "ok" && (
+              <p className="text-xs text-emerald-700 mt-1">✓ 사용 가능한 채취번호입니다.</p>
+            )}
           </div>
           <div>
             <span className="field-label">채취일</span>
@@ -460,7 +526,25 @@ export function EventForm(props: Props) {
 
       {/* 사진 */}
       <section className="space-y-2">
-        <h2 className="text-base font-bold text-brand-700">사진 (4종)</h2>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-base font-bold text-brand-700">사진 (4종)</h2>
+          <label className="text-xs text-stone-600 inline-flex items-center gap-1">
+            품질
+            <select
+              className="text-xs border border-stone-300 rounded px-1.5 py-0.5 bg-white"
+              value={photoQuality}
+              onChange={(e) => changePhotoQuality(e.target.value as PhotoQuality)}
+            >
+              {(Object.keys(PHOTO_QUALITY_LABELS) as PhotoQuality[]).map((q) => (
+                <option key={q} value={q}>{PHOTO_QUALITY_LABELS[q]}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="text-[11px] text-stone-500">
+          데이터 요금/저장공간이 부족하면 「빠름」으로, 정밀 식별이 중요한 잎/낙엽은 「고화질」로 권장.
+          선택은 단말에 저장되어 다음 야장에도 적용됩니다.
+        </p>
         <div className="grid grid-cols-2 gap-3">
           {(Object.keys(PHOTO_LABELS) as PhotoCategory[]).map((cat) => (
             <PhotoSlot
@@ -469,6 +553,7 @@ export function EventForm(props: Props) {
               label={PHOTO_LABELS[cat]}
               value={photos[cat]}
               onChange={(p) => setPhotos((prev) => ({ ...prev, [cat]: p }))}
+              quality={photoQuality}
             />
           ))}
         </div>
