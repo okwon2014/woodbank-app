@@ -6,3 +6,8 @@ out/
 .env*.local
 .DS_Store
 *.log
+# Test artifacts
+coverage/
+tests/e2e/.results/
+playwright-report/
+test-results/

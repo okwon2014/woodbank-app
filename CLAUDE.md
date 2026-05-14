@@ -20,7 +20,12 @@ npm run dev          # http://localhost:3000
 npm run typecheck    # tsc --noEmit (PR 전 필수)
 npm run lint         # next lint
 npm run build        # 프로덕션 빌드 확인
+npm test             # Vitest 단위 테스트 (PR 전 필수)
+npm run test:watch   # Vitest 감시 모드
+npm run test:e2e     # Playwright 스모크 (사전 1회: npm run test:e2e:install)
 ```
+
+테스트 가이드는 [docs/TESTING.md](docs/TESTING.md). 새 순수 함수를 추가하면 `*.test.ts` 도 함께.
 
 ## 폴더 구조 (핵심만)
 

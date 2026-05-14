@@ -26,7 +26,16 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Supabase 가 일시적으로 응답하지 않거나 환경변수가 빠진 상황에서도
+  // middleware 가 500 을 던지지 않도록 보호. 실패 시엔 미인증으로 간주해
+  // 보호 경로면 /login 으로 보낸다.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch {
+    user = null;
+  }
 
   if (!user && !isPublic) {
     const url = req.nextUrl.clone();
