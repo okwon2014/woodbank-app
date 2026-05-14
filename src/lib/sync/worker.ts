@@ -3,7 +3,14 @@
 
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { db } from "@/lib/db/dexie";
-import { isAbandoned, isWaiting, markFailed, markSynced } from "@/lib/db/queue";
+import {
+  isAbandoned,
+  isConflictError,
+  isWaiting,
+  markConflict,
+  markFailed,
+  markSynced,
+} from "@/lib/db/queue";
 import type { QueueItem } from "@/types/db";
 
 let _running = false;
@@ -77,8 +84,15 @@ export async function syncOnce(opts: { onProgress?: (msg: string) => void } = {}
       } catch (e: any) {
         fail++;
         const msg = e?.message || String(e);
-        await markFailed(row.seq!, msg);
-        log(`실패: ${msg}`);
+        if (isConflictError(e)) {
+          // 같은 페이로드를 재시도해도 동일 실패가 반복될 케이스(예: sample_no 중복).
+          // 자동 재시도를 즉시 중단하고 사용자가 /queue에서 결정하도록 한다.
+          await markConflict(row.seq!, msg);
+          log(`충돌: ${msg}`);
+        } else {
+          await markFailed(row.seq!, msg);
+          log(`실패: ${msg}`);
+        }
       }
     }
     return { ran: true, processed: ok + fail, ok, fail, skipped };

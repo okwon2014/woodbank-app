@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   abandonQueueItem,
   isAbandoned,
+  isConflict,
   isWaiting,
   listQueue,
   MAX_RETRIES,
@@ -49,7 +50,8 @@ export default function QueuePage() {
     await refresh();
   }
 
-  const abandonedCount = rows.filter((r) => isAbandoned(r)).length;
+  const conflictCount = rows.filter((r) => isConflict(r)).length;
+  const abandonedOnlyCount = rows.filter((r) => isAbandoned(r) && !isConflict(r)).length;
 
   return (
     <div className="space-y-4">
@@ -60,10 +62,16 @@ export default function QueuePage() {
         </button>
       </div>
 
-      {abandonedCount > 0 && (
+      {conflictCount > 0 && (
         <p className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2">
-          ⚠️ {MAX_RETRIES}회 연속 실패로 자동 재시도가 중단된 항목 {abandonedCount}건이 있습니다.
-          원인을 확인한 뒤 [재시도] 또는 [큐에서 제거]를 눌러주세요.
+          ⛔ 서버 충돌로 자동 재시도가 중단된 항목 {conflictCount}건이 있습니다.
+          가장 흔한 원인은 채취 번호(sample_no) 중복입니다. 입력값을 고친 뒤 새 야장으로 다시 저장하거나 [큐에서 제거]를 눌러주세요.
+        </p>
+      )}
+      {abandonedOnlyCount > 0 && (
+        <p className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2">
+          ⚠️ {MAX_RETRIES}회 연속 실패로 자동 재시도가 중단된 항목 {abandonedOnlyCount}건이 있습니다.
+          원인을 확인한 뒤 [지금 재시도] 또는 [큐에서 제거]를 눌러주세요.
         </p>
       )}
 
@@ -73,6 +81,7 @@ export default function QueuePage() {
       <ul className="space-y-2">
         {rows.map((r) => {
           const abandoned = isAbandoned(r);
+          const conflict = isConflict(r);
           const waiting = !abandoned && isWaiting(r);
           return (
             <li key={r.seq} className="card">
@@ -80,7 +89,12 @@ export default function QueuePage() {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold flex items-center gap-2">
                     <span>{r.kind === "sampling_event" ? "📝 채취 이벤트" : "🖼 사진 업로드"}</span>
-                    {abandoned && (
+                    {conflict && (
+                      <span className="text-[10px] uppercase tracking-wide bg-rose-200 text-rose-800 px-1.5 py-0.5 rounded">
+                        서버 충돌
+                      </span>
+                    )}
+                    {abandoned && !conflict && (
                       <span className="text-[10px] uppercase tracking-wide bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">
                         자동 재시도 중단
                       </span>

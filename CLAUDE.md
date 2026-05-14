@@ -53,6 +53,7 @@ public/{sw.js, manifest.webmanifest, icons/}
 4. 성공 → `markSynced` (큐에서 삭제), 실패 → `markFailed` (retries 증가 + 지수 백오프)
 5. `installAutoSync()`가 online 이벤트 + 5분 주기로 자동 실행
 6. 재시도 정책: `MAX_RETRIES=5`, 백오프 30s→1m→5m→30m→2h. 초과 시 자동 재시도 중단되어 `/queue`에서 사용자가 [재시도] 또는 [큐에서 제거]로 처리.
+7. 충돌 감지: Postgres `23505`(unique 위반, 예: sample_no 중복)·`23514`(check 위반)는 `markConflict`로 즉시 자동 재시도 중단되고 `sync_status='conflict'`로 표시. UI에서 빨간 "서버 충돌" 배지.
 
 **주의**: Dexie 스키마를 바꾸면 `version(N+1).stores(...)` 추가 필수. 기존 사용자 단말에 데이터가 있을 수 있다.
 

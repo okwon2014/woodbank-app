@@ -101,8 +101,52 @@ export async function markFailed(seq: number, err: string) {
 
 // 사용자가 수동으로 재시도(또는 자동 재시도 중단을 해제)할 때.
 // retries는 보존(원인 추적용)하고 next_retry_at만 초기화한다.
+// 충돌(retries=MAX, last_error CONFLICT:) 항목은 retries도 한 단계 내려 자동 재시도를 다시 허용한다.
 export async function retryNow(seq: number) {
-  await db().sync_queue.update(seq, { next_retry_at: null });
+  const row = await db().sync_queue.get(seq);
+  if (!row) return;
+  const patch: Partial<QueueRow> = { next_retry_at: null };
+  if ((row.retries ?? 0) >= MAX_RETRIES) {
+    patch.retries = MAX_RETRIES - 1;
+  }
+  await db().sync_queue.update(seq, patch);
+  if (row.kind === "sampling_event") {
+    const e = await db().sampling_events.get(row.payload_id);
+    if (e && e.sync_status === "conflict") {
+      await db().sampling_events.put({ ...e, sync_status: "queued" });
+    }
+  }
+}
+
+// 서버 측 제약(unique 등)으로 동일 페이로드를 계속 보내봐야 실패만 누적되는 경우.
+// retries를 MAX로 점프해 자동 재시도를 즉시 중단하고, last_error에 CONFLICT 프리픽스를 단다.
+// sampling_event는 sync_status='conflict'로 표시되어 PendingEvents 배너에서도 보인다.
+export async function markConflict(seq: number, err: string) {
+  const row = await db().sync_queue.get(seq);
+  if (!row) return;
+  await db().transaction("rw", db().sync_queue, db().sampling_events, async () => {
+    await db().sync_queue.update(seq, {
+      retries: MAX_RETRIES,
+      last_error: err.startsWith("CONFLICT:") ? err : `CONFLICT: ${err}`,
+      next_retry_at: null,
+    });
+    if (row.kind === "sampling_event") {
+      const e = await db().sampling_events.get(row.payload_id);
+      if (e) await db().sampling_events.put({ ...e, sync_status: "conflict" });
+    }
+  });
+}
+
+// last_error의 CONFLICT: 프리픽스로 충돌 여부 판정.
+export function isConflict(row: Pick<QueueRow, "last_error">): boolean {
+  return !!row.last_error && row.last_error.startsWith("CONFLICT:");
+}
+
+// Supabase/PostgREST 에러에서 "충돌"로 분류할 코드.
+// 23505 = unique_violation (sample_no 중복 등), 23514 = check_violation (값 범위 등).
+export function isConflictError(e: any): boolean {
+  const code = e?.code ?? e?.details?.code;
+  return code === "23505" || code === "23514";
 }
 
 // 자동 재시도가 중단된 항목(또는 사용자가 포기한 항목)을 영구 삭제.
