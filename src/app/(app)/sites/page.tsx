@@ -76,28 +76,55 @@ async function ListView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServe
 }
 
 async function MapView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServer>> }) {
-  // 권한 내(RLS 통과) trees + 사이트·수종 조인. lat/lon 없는 행은 제외.
+  // 권한 내(RLS 통과) trees — 인라인 join 추론 실패 케이스를 피하기 위해
+  // sites·species 는 별도 호출 후 클라이언트에서 merge.
   const { data: trees, error } = await sb
     .from("trees")
-    .select(
-      `id, site_id, tree_local_no, lat, lon,
-       sites!inner ( code, region_sigungu ),
-       species ( ko_name )`,
-    )
+    .select("id, site_id, tree_local_no, lat, lon, species_code")
     .not("lat", "is", null)
     .not("lon", "is", null)
     .limit(2000);
 
-  const markers: MapTreeMarker[] = ((trees as any[]) ?? []).map((t) => ({
+  const treeRows = (trees as Array<{
+    id: string;
+    site_id: string;
+    tree_local_no: string;
+    lat: number;
+    lon: number;
+    species_code: string | null;
+  }> | null) ?? [];
+
+  const siteIds = Array.from(new Set(treeRows.map((t) => t.site_id).filter(Boolean)));
+  const speciesCodes = Array.from(
+    new Set(treeRows.map((t) => t.species_code).filter((c): c is string => !!c)),
+  );
+
+  const [sitesRes, speciesRes] = await Promise.all([
+    siteIds.length
+      ? sb.from("sites").select("id, code, region_sigungu").in("id", siteIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; code: string; region_sigungu: string | null }>, error: null }),
+    speciesCodes.length
+      ? sb.from("species").select("code, ko_name").in("code", speciesCodes)
+      : Promise.resolve({ data: [] as Array<{ code: string; ko_name: string | null }>, error: null }),
+  ]);
+
+  const sitesMap = new Map((sitesRes.data ?? []).map((s) => [s.id, s]));
+  const speciesMap = new Map((speciesRes.data ?? []).map((sp) => [sp.code, sp]));
+
+  const markers: MapTreeMarker[] = treeRows.map((t) => ({
     id: t.id,
     site_id: t.site_id,
     tree_local_no: t.tree_local_no,
-    site_code: t.sites?.code ?? "",
-    region_sigungu: t.sites?.region_sigungu ?? null,
-    species_ko: t.species?.ko_name ?? null,
+    site_code: sitesMap.get(t.site_id)?.code ?? "",
+    region_sigungu: sitesMap.get(t.site_id)?.region_sigungu ?? null,
+    species_ko: t.species_code ? speciesMap.get(t.species_code)?.ko_name ?? null : null,
     lat: t.lat,
     lon: t.lon,
   }));
+
+  // 진단용: GPS 없는 개체목 / RLS 로 가려진 site 가 있을 때 어디서 막혔는지 노출.
+  const totalTreesWithGps = treeRows.length;
+  const visibleSites = sitesMap.size;
 
   return (
     <>
@@ -105,6 +132,11 @@ async function MapView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServer
       <SitesMapView markers={markers} />
       <p className="text-xs text-stone-500">
         ※ 좌표가 입력된 개체목 {markers.length}건을 표시합니다. 배경 지도는 OpenStreetMap.
+        {totalTreesWithGps > 0 && visibleSites === 0 && (
+          <>
+            {" "}<span className="text-amber-700">⚠️ trees 는 {totalTreesWithGps}건 가져왔지만 연결된 sites 가 보이지 않습니다. RLS 권한 또는 데이터 불일치 가능성 — 운영자에게 알려주세요.</span>
+          </>
+        )}
       </p>
     </>
   );
