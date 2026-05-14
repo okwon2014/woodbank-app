@@ -188,7 +188,6 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | 패키지 | 등급 | 내용 | 처리 |
 |---|---|---|---|
 | `next@14.2.x` | high | 14.x 라인에서는 패치되지 않는 advisory 일부 잔존(메이저 15/16 에서 fix) | 별도 PR 로 메이저 업그레이드 검토. App Router·`@supabase/ssr`·`next.config.mjs` 호환성 점검 필요 |
-| `xlsx@0.18.x` | high | sheetJS 의 prototype pollution / ReDoS — 공식 npm 배포가 0.18.5 에서 멈춤 | `exceljs` 등으로 교체하는 별도 PR. 영향 코드: [src/lib/export/excel.ts](../src/lib/export/excel.ts) |
 | `postcss` (transient via next) | moderate | XSS via unescaped `</style>` | Next 메이저 업그레이드 시 함께 해결 |
 
 업그레이드 절차:
