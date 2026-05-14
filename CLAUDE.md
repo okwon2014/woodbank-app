@@ -35,6 +35,7 @@ src/
 │   ├── (app)/           # 인증 필요 — layout이 세션 보장
 │   │   ├── sites|trees|events|profile|queue/
 │   │   └── admin/{users,import,export,export/print}/
+│   │   └── stats/                # 통계 대시보드 (RLS 권한 범위 내)
 │   ├── api/admin/invite/        # service_role 키로 이메일 초대
 │   ├── api/webhooks/new-user/   # Resend로 admin에게 가입 알림
 │   ├── auth/{reset,update}-password/
