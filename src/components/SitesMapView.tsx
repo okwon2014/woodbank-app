@@ -44,6 +44,9 @@ export function SitesMapView({ markers }: Props) {
   const mapRef = useRef<MaplibreGL.Map | null>(null);
   const libRef = useRef<typeof import("maplibre-gl") | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +66,9 @@ export function SitesMapView({ markers }: Props) {
           style: STYLE as unknown as MaplibreGL.StyleSpecification,
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
+          // WebGL 캔버스를 export 가능하게 — 그렇지 않으면 toBlob/toDataURL 결과가 빈 이미지.
+          // 약간의 성능 비용은 있지만 N=수천 마커 수준에서는 무시할 만함.
+          preserveDrawingBuffer: true,
         });
         map.addControl(new lib.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(new lib.ScaleControl({ unit: "metric" }), "bottom-left");
@@ -72,7 +78,10 @@ export function SitesMapView({ markers }: Props) {
         onResize = () => map.resize();
         setTimeout(onResize, 100);
         window.addEventListener("resize", onResize);
-        map.once("load", onResize);
+        map.once("load", () => {
+          if (onResize) onResize();
+          setReady(true);
+        });
       } catch (e: any) {
         setError(e?.message ?? "지도 라이브러리 로드 실패");
       }
@@ -140,6 +149,95 @@ export function SitesMapView({ markers }: Props) {
     }
   }, [markers, router]);
 
+  async function exportImage() {
+    const map = mapRef.current;
+    if (!map) return;
+    setExporting(true);
+    try {
+      // 1) 지도 캔버스 한 번 더 render 후 export (preserveDrawingBuffer 가 있어도
+      //    가장 최신 프레임을 확보).
+      await new Promise<void>((resolve) => {
+        map.once("render", () => resolve());
+        map.triggerRepaint();
+      });
+      const source = map.getCanvas();
+      const container = map.getContainer();
+      const dpr = source.width / container.clientWidth;
+
+      const off = document.createElement("canvas");
+      off.width = source.width;
+      off.height = source.height;
+      const ctx = off.getContext("2d");
+      if (!ctx) throw new Error("canvas 2d context 가져오기 실패");
+
+      // 2) 지도 픽셀 그대로 복사
+      ctx.drawImage(source, 0, 0);
+
+      // 3) 마커 합성 — DOM Marker 는 캔버스 밖이라 별도로 그린다.
+      for (const m of markers) {
+        const p = map.project([m.lon, m.lat]);
+        const x = p.x * dpr;
+        const y = p.y * dpr;
+        const r = 7 * dpr;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#235a3f";
+        ctx.fill();
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeStyle = "#fff";
+        ctx.stroke();
+
+        if (showLabels) {
+          const label = `${m.site_code} #${m.tree_local_no}`;
+          ctx.font = `${11 * dpr}px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+          ctx.textBaseline = "middle";
+          // 흰 외곽선 → 작은 검은 글자 (가독성)
+          const tx = x + r + 4 * dpr;
+          const ty = y;
+          ctx.lineWidth = 3 * dpr;
+          ctx.strokeStyle = "rgba(255,255,255,0.95)";
+          ctx.strokeText(label, tx, ty);
+          ctx.fillStyle = "#1c1917";
+          ctx.fillText(label, tx, ty);
+        }
+      }
+
+      // 4) Attribution 배지 — OSM 데이터 라이선스 표기 (보고서 사용 시 필수)
+      const attribution = "© OpenStreetMap contributors";
+      ctx.font = `${11 * dpr}px sans-serif`;
+      const padX = 8 * dpr;
+      const padY = 4 * dpr;
+      const w = ctx.measureText(attribution).width + padX * 2;
+      const h = 18 * dpr;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillRect(off.width - w - 4 * dpr, off.height - h - 4 * dpr, w, h);
+      ctx.fillStyle = "#1c1917";
+      ctx.textBaseline = "middle";
+      ctx.fillText(attribution, off.width - w - 4 * dpr + padX, off.height - h - 4 * dpr + h / 2);
+
+      // 5) PNG 다운로드
+      await new Promise<void>((resolve, reject) => {
+        off.toBlob((blob) => {
+          if (!blob) return reject(new Error("이미지 생성 실패 (캔버스가 tainted 일 수 있습니다)"));
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+          a.download = `woodbank-map-${ts}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          resolve();
+        }, "image/png");
+      });
+    } catch (e: any) {
+      alert(`지도 이미지 저장 실패: ${e?.message ?? e}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="relative">
       <div
@@ -147,6 +245,30 @@ export function SitesMapView({ markers }: Props) {
         style={{ height: "calc(100vh - 200px)", minHeight: 400 }}
         className="w-full rounded-xl border border-stone-200 overflow-hidden bg-stone-100"
       />
+
+      {/* 상단 toolbar — 이미지 저장 / 라벨 토글 */}
+      {!error && (
+        <div className="absolute top-3 left-3 flex items-center gap-2 bg-white/95 rounded-lg shadow border border-stone-200 px-2 py-1.5 text-xs">
+          <button
+            type="button"
+            onClick={exportImage}
+            disabled={!ready || exporting}
+            className="px-2 py-1 rounded bg-brand-700 text-white hover:bg-brand-500 disabled:opacity-50"
+            title="현재 지도 화면을 마커·라이선스와 함께 PNG 로 저장"
+          >
+            {exporting ? "저장 중…" : "🖼 이미지 저장"}
+          </button>
+          <label className="inline-flex items-center gap-1 text-stone-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showLabels}
+              onChange={(e) => setShowLabels(e.target.checked)}
+            />
+            마커 라벨
+          </label>
+        </div>
+      )}
+
       {error && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-lg px-4 py-2 text-sm shadow">
@@ -155,7 +277,7 @@ export function SitesMapView({ markers }: Props) {
         </div>
       )}
       {!error && markers.length === 0 && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none">
+        <div className="absolute left-1/2 -translate-x-1/2 top-16 pointer-events-none">
           <div className="bg-white/90 rounded-lg px-4 py-2 text-sm text-stone-700 shadow">
             지도에 표시할 좌표가 있는 개체목이 없습니다. (지도는 정상 표시)
           </div>
