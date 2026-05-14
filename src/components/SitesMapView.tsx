@@ -44,6 +44,11 @@ export function SitesMapView({ markers }: Props) {
   const mapRef = useRef<MaplibreGL.Map | null>(null);
   const libRef = useRef<typeof import("maplibre-gl") | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [drawnMarkerCount, setDrawnMarkerCount] = useState(0);
+  const [cursor, setCursor] = useState<{ lat: number; lon: number; zoom: number } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +68,9 @@ export function SitesMapView({ markers }: Props) {
           style: STYLE as unknown as MaplibreGL.StyleSpecification,
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
+          // WebGL 캔버스를 export 가능하게 — 그렇지 않으면 toBlob/toDataURL 결과가 빈 이미지.
+          // 약간의 성능 비용은 있지만 N=수천 마커 수준에서는 무시할 만함.
+          preserveDrawingBuffer: true,
         });
         map.addControl(new lib.NavigationControl({ showCompass: false }), "top-right");
         map.addControl(new lib.ScaleControl({ unit: "metric" }), "bottom-left");
@@ -72,7 +80,19 @@ export function SitesMapView({ markers }: Props) {
         onResize = () => map.resize();
         setTimeout(onResize, 100);
         window.addEventListener("resize", onResize);
-        map.once("load", onResize);
+        map.once("load", () => {
+          if (onResize) onResize();
+          setReady(true);
+        });
+
+        // 마우스 위치의 GPS · 현재 zoom 을 toolbar 옆에 실시간 표시
+        map.on("mousemove", (e) => {
+          setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng, zoom: map.getZoom() });
+        });
+        map.on("mouseout", () => setCursor(null));
+        map.on("zoom", () => {
+          setCursor((prev) => (prev ? { ...prev, zoom: map.getZoom() } : prev));
+        });
       } catch (e: any) {
         setError(e?.message ?? "지도 라이브러리 로드 실패");
       }
@@ -92,32 +112,68 @@ export function SitesMapView({ markers }: Props) {
   useEffect(() => {
     const map = mapRef.current;
     const lib = libRef.current;
-    if (!map || !lib) return;
+    // ready 가 의존성에 있어야 map.once("load") 후 effect 가 재실행되어 마커가 그려진다.
+    if (!map || !lib || !ready) return;
 
     const layoutMarkers = () => {
       document.querySelectorAll(".wb-tree-marker").forEach((el) => el.remove());
+      setDrawnMarkerCount(0);
       if (markers.length === 0) return;
 
       const bounds = new lib.LngLatBounds();
       for (const m of markers) {
-        const el = document.createElement("button");
-        el.className =
-          "wb-tree-marker w-3 h-3 rounded-full border-2 border-white shadow ring-1 ring-stone-900/30 cursor-pointer";
-        el.style.background = "#235a3f";
-        el.title = `${m.site_code} #${m.tree_local_no} · ${m.species_ko ?? ""}`;
-        el.addEventListener("click", (e) => {
+        // 마커 + 옆에 라벨을 함께 그린다. 라이브 화면이 작은 점만 있어 안 보이는
+        // 문제가 있었어서 강한 대비 색·외곽선·라벨 기본 표시로.
+        const wrap = document.createElement("div");
+        wrap.className = "wb-tree-marker";
+        wrap.style.display = "flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "4px";
+        wrap.style.cursor = "pointer";
+        wrap.style.transform = "translateY(-2px)"; // dot 가운데가 정확히 좌표 위에 오도록
+
+        const dot = document.createElement("span");
+        dot.style.width = "16px";
+        dot.style.height = "16px";
+        dot.style.borderRadius = "50%";
+        dot.style.background = "#dc2626";        // rose-600 — OSM 녹지 위에서 가장 잘 보이는 색
+        dot.style.border = "3px solid #ffffff";
+        dot.style.boxShadow = "0 1px 4px rgba(0,0,0,0.5)";
+        dot.style.flex = "0 0 auto";
+        wrap.appendChild(dot);
+
+        if (showLabels) {
+          const label = document.createElement("span");
+          label.textContent = `${m.site_code} #${m.tree_local_no}`;
+          label.style.fontSize = "11px";
+          label.style.fontWeight = "600";
+          label.style.padding = "1px 5px";
+          label.style.borderRadius = "4px";
+          label.style.background = "rgba(255,255,255,0.95)";
+          label.style.color = "#1c1917";
+          label.style.border = "1px solid rgba(0,0,0,0.15)";
+          label.style.whiteSpace = "nowrap";
+          label.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+          wrap.appendChild(label);
+        }
+
+        wrap.title = `${m.site_code} #${m.tree_local_no} · ${m.species_ko ?? ""} (${m.lat.toFixed(5)}, ${m.lon.toFixed(5)})`;
+        wrap.addEventListener("click", (e) => {
           e.stopPropagation();
           router.push(`/trees/${m.id}`);
         });
 
-        new lib.Marker({ element: el })
+        new lib.Marker({ element: wrap, anchor: "left" })
           .setLngLat([m.lon, m.lat])
           .setPopup(
-            new lib.Popup({ offset: 12, closeButton: false }).setHTML(
+            new lib.Popup({ offset: 16, closeButton: false }).setHTML(
               `<div style="font-size:12px;line-height:1.4">
                 <div><b>${escapeHtml(m.site_code)}</b> #${escapeHtml(m.tree_local_no)}</div>
                 <div style="color:#666">${escapeHtml(m.region_sigungu ?? "")}</div>
                 ${m.species_ko ? `<div>${escapeHtml(m.species_ko)}</div>` : ""}
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#888;margin-top:2px">
+                  ${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}
+                </div>
                 <div style="margin-top:4px;color:#235a3f">클릭하여 상세 보기 →</div>
               </div>`,
             ),
@@ -127,18 +183,113 @@ export function SitesMapView({ markers }: Props) {
         bounds.extend([m.lon, m.lat]);
       }
       if (markers.length === 1) {
-        map.flyTo({ center: [markers[0].lon, markers[0].lat], zoom: 14, duration: 600 });
+        map.flyTo({ center: [markers[0].lon, markers[0].lat], zoom: 16, duration: 600 });
       } else {
-        map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
+        // padding 을 키워 가장자리 마커가 컨트롤·toolbar 에 가리지 않게 하고,
+        // 너무 멀리 zoom out 되지 않게 maxZoom 약간 낮춤.
+        map.fitBounds(bounds, { padding: { top: 80, right: 60, bottom: 60, left: 60 }, maxZoom: 16, duration: 600 });
       }
+      // 실제로 DOM 에 들어간 마커 카운트 — toolbar 의 badge 와 비교해 진단.
+      setDrawnMarkerCount(document.querySelectorAll(".wb-tree-marker").length);
     };
 
-    if (map.loaded()) {
-      layoutMarkers();
-    } else {
-      map.once("load", layoutMarkers);
+    layoutMarkers();
+  }, [markers, ready, showLabels, router]);
+
+  async function exportImage() {
+    const map = mapRef.current;
+    if (!map) return;
+    setExporting(true);
+    try {
+      // 1) 지도 캔버스 한 번 더 render 후 export (preserveDrawingBuffer 가 있어도
+      //    가장 최신 프레임을 확보).
+      await new Promise<void>((resolve) => {
+        map.once("render", () => resolve());
+        map.triggerRepaint();
+      });
+      const source = map.getCanvas();
+      const container = map.getContainer();
+      const dpr = source.width / container.clientWidth;
+
+      const off = document.createElement("canvas");
+      off.width = source.width;
+      off.height = source.height;
+      const ctx = off.getContext("2d");
+      if (!ctx) throw new Error("canvas 2d context 가져오기 실패");
+
+      // 2) 지도 픽셀 그대로 복사
+      ctx.drawImage(source, 0, 0);
+
+      // 3) 마커 합성 — DOM Marker 는 캔버스 밖이라 별도로 그린다.
+      //    화면 디자인과 동일하게 빨간 점 + 흰 외곽선 + 그림자.
+      for (const m of markers) {
+        const p = map.project([m.lon, m.lat]);
+        const x = p.x * dpr;
+        const y = p.y * dpr;
+        const r = 8 * dpr;
+        // 그림자
+        ctx.beginPath();
+        ctx.arc(x, y + 1 * dpr, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fill();
+        // 빨간 점
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#dc2626";
+        ctx.fill();
+        ctx.lineWidth = 3 * dpr;
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
+
+        if (showLabels) {
+          const label = `${m.site_code} #${m.tree_local_no}`;
+          ctx.font = `bold ${11 * dpr}px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+          ctx.textBaseline = "middle";
+          const tx = x + r + 4 * dpr;
+          const ty = y;
+          ctx.lineWidth = 4 * dpr;
+          ctx.strokeStyle = "rgba(255,255,255,0.95)";
+          ctx.strokeText(label, tx, ty);
+          ctx.fillStyle = "#1c1917";
+          ctx.fillText(label, tx, ty);
+        }
+      }
+
+      // 4) Attribution 배지 — OSM 데이터 라이선스 표기 (보고서 사용 시 필수)
+      const attribution = "© OpenStreetMap contributors";
+      ctx.font = `${11 * dpr}px sans-serif`;
+      const padX = 8 * dpr;
+      const padY = 4 * dpr;
+      const w = ctx.measureText(attribution).width + padX * 2;
+      const h = 18 * dpr;
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillRect(off.width - w - 4 * dpr, off.height - h - 4 * dpr, w, h);
+      ctx.fillStyle = "#1c1917";
+      ctx.textBaseline = "middle";
+      ctx.fillText(attribution, off.width - w - 4 * dpr + padX, off.height - h - 4 * dpr + h / 2);
+
+      // 5) PNG 다운로드
+      await new Promise<void>((resolve, reject) => {
+        off.toBlob((blob) => {
+          if (!blob) return reject(new Error("이미지 생성 실패 (캔버스가 tainted 일 수 있습니다)"));
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+          a.download = `woodbank-map-${ts}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          resolve();
+        }, "image/png");
+      });
+    } catch (e: any) {
+      alert(`지도 이미지 저장 실패: ${e?.message ?? e}`);
+    } finally {
+      setExporting(false);
     }
-  }, [markers, router]);
+  }
 
   return (
     <div className="relative">
@@ -147,6 +298,49 @@ export function SitesMapView({ markers }: Props) {
         style={{ height: "calc(100vh - 200px)", minHeight: 400 }}
         className="w-full rounded-xl border border-stone-200 overflow-hidden bg-stone-100"
       />
+
+      {/* 상단 toolbar — 이미지 저장 / 라벨 토글 / 마커 카운트 */}
+      {!error && (
+        <div className="absolute top-3 left-3 flex items-center gap-2 bg-white/95 rounded-lg shadow border border-stone-200 px-2 py-1.5 text-xs">
+          <button
+            type="button"
+            onClick={exportImage}
+            disabled={!ready || exporting}
+            className="px-2 py-1 rounded bg-brand-700 text-white hover:bg-brand-500 disabled:opacity-50"
+            title="현재 지도 화면을 마커·라이선스와 함께 PNG 로 저장"
+          >
+            {exporting ? "저장 중…" : "🖼 이미지 저장"}
+          </button>
+          <label className="inline-flex items-center gap-1 text-stone-700 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showLabels}
+              onChange={(e) => setShowLabels(e.target.checked)}
+            />
+            마커 라벨
+          </label>
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono ${
+              drawnMarkerCount === markers.length
+                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                : "bg-rose-50 text-rose-800 border border-rose-200"
+            }`}
+            title="화면에 실제로 그려진 빨간 마커 수 / 데이터로 전달된 좌표 수"
+          >
+            🔴 {drawnMarkerCount}/{markers.length}
+          </span>
+        </div>
+      )}
+
+      {/* 우하단 — 마우스 위치 GPS · 현재 zoom 실시간 표시 */}
+      {!error && (
+        <div className="absolute right-3 bottom-12 bg-white/95 rounded-md shadow border border-stone-200 px-2.5 py-1 text-[11px] font-mono text-stone-700 pointer-events-none">
+          {cursor
+            ? `${cursor.lat.toFixed(5)}, ${cursor.lon.toFixed(5)} · z${cursor.zoom.toFixed(2)}`
+            : "지도 위로 마우스를 옮기면 좌표가 표시됩니다"}
+        </div>
+      )}
+
       {error && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="bg-rose-50 border border-rose-200 text-rose-800 rounded-lg px-4 py-2 text-sm shadow">
@@ -155,7 +349,7 @@ export function SitesMapView({ markers }: Props) {
         </div>
       )}
       {!error && markers.length === 0 && (
-        <div className="absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none">
+        <div className="absolute left-1/2 -translate-x-1/2 top-16 pointer-events-none">
           <div className="bg-white/90 rounded-lg px-4 py-2 text-sm text-stone-700 shadow">
             지도에 표시할 좌표가 있는 개체목이 없습니다. (지도는 정상 표시)
           </div>
