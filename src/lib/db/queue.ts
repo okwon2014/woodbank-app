@@ -2,6 +2,24 @@
 import { db, type PhotoPending, type QueueRow } from "./dexie";
 import type { SamplingEvent, Tree, Site, PhotoCategory } from "@/types/db";
 
+// 자동 재시도 정책: 실패 후 지수 백오프, 5회 시도 후 자동 재시도 중단.
+// 그 이후엔 사용자가 /queue에서 "재시도" 또는 "삭제"로 처리.
+export const MAX_RETRIES = 5;
+const RETRY_BACKOFF_MS = [30_000, 60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60_000];
+
+export function isAbandoned(row: Pick<QueueRow, "retries">): boolean {
+  return (row.retries ?? 0) >= MAX_RETRIES;
+}
+
+export function isWaiting(row: Pick<QueueRow, "next_retry_at">): boolean {
+  return !!row.next_retry_at && new Date(row.next_retry_at).getTime() > Date.now();
+}
+
+function backoffNextRetryAt(retries: number): string {
+  const idx = Math.min(retries - 1, RETRY_BACKOFF_MS.length - 1);
+  return new Date(Date.now() + RETRY_BACKOFF_MS[idx]).toISOString();
+}
+
 export async function enqueueEvent(args: {
   event: SamplingEvent;
   tree?: Tree;
@@ -72,9 +90,36 @@ export async function markSynced(seq: number, opts: { kind: "sampling_event" | "
 export async function markFailed(seq: number, err: string) {
   const row = await db().sync_queue.get(seq);
   if (!row) return;
+  const retries = (row.retries ?? 0) + 1;
+  const next_retry_at = retries >= MAX_RETRIES ? null : backoffNextRetryAt(retries);
   await db().sync_queue.update(seq, {
-    retries: (row.retries ?? 0) + 1,
+    retries,
     last_error: err,
+    next_retry_at,
+  });
+}
+
+// 사용자가 수동으로 재시도(또는 자동 재시도 중단을 해제)할 때.
+// retries는 보존(원인 추적용)하고 next_retry_at만 초기화한다.
+export async function retryNow(seq: number) {
+  await db().sync_queue.update(seq, { next_retry_at: null });
+}
+
+// 자동 재시도가 중단된 항목(또는 사용자가 포기한 항목)을 영구 삭제.
+// 사진의 경우 photos_pending의 Blob도 함께 정리한다.
+export async function abandonQueueItem(seq: number) {
+  const row = await db().sync_queue.get(seq);
+  if (!row) return;
+  await db().transaction("rw", db().sync_queue, db().photos_pending, db().sampling_events, async () => {
+    await db().sync_queue.delete(seq);
+    if (row.kind === "photo") {
+      await db().photos_pending.delete(row.payload_id);
+    }
+    // sampling_event 본문은 보존(사용자 원본 데이터). sync_status만 표시 변경.
+    if (row.kind === "sampling_event") {
+      const e = await db().sampling_events.get(row.payload_id);
+      if (e) await db().sampling_events.put({ ...e, sync_status: "draft" });
+    }
   });
 }
 

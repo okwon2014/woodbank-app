@@ -50,8 +50,9 @@ public/{sw.js, manifest.webmanifest, icons/}
 1. `EventForm`/`PhotoSlot` → `enqueueEvent()` / `enqueuePhoto()` ([src/lib/db/queue.ts](src/lib/db/queue.ts))
 2. Dexie 테이블: `sync_queue`, `photos_pending`, `sampling_events(sync_status)`
 3. `syncOnce()`가 큐를 순회하며 Supabase `upsert` ([src/lib/sync/worker.ts](src/lib/sync/worker.ts))
-4. 성공 → `markSynced` (큐에서 삭제), 실패 → `markFailed` (retries 증가)
+4. 성공 → `markSynced` (큐에서 삭제), 실패 → `markFailed` (retries 증가 + 지수 백오프)
 5. `installAutoSync()`가 online 이벤트 + 5분 주기로 자동 실행
+6. 재시도 정책: `MAX_RETRIES=5`, 백오프 30s→1m→5m→30m→2h. 초과 시 자동 재시도 중단되어 `/queue`에서 사용자가 [재시도] 또는 [큐에서 제거]로 처리.
 
 **주의**: Dexie 스키마를 바꾸면 `version(N+1).stores(...)` 추가 필수. 기존 사용자 단말에 데이터가 있을 수 있다.
 

@@ -3,7 +3,7 @@
 
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { db } from "@/lib/db/dexie";
-import { markFailed, markSynced } from "@/lib/db/queue";
+import { isAbandoned, isWaiting, markFailed, markSynced } from "@/lib/db/queue";
 import type { QueueItem } from "@/types/db";
 
 let _running = false;
@@ -23,7 +23,14 @@ export async function syncOnce(opts: { onProgress?: (msg: string) => void } = {}
 
     let ok = 0;
     let fail = 0;
+    let skipped = 0;
     for (const row of rows) {
+      // 자동 재시도가 중단됐거나(retries >= MAX) 백오프 대기 중이면 건너뛴다.
+      // 사용자가 /queue 에서 명시적으로 재시도해야 다시 시도된다.
+      if (isAbandoned(row) || isWaiting(row)) {
+        skipped++;
+        continue;
+      }
       const payload = row.payload as QueueItem;
       try {
         if (payload.kind === "sampling_event") {
@@ -74,7 +81,7 @@ export async function syncOnce(opts: { onProgress?: (msg: string) => void } = {}
         log(`실패: ${msg}`);
       }
     }
-    return { ran: true, processed: ok + fail, ok, fail };
+    return { ran: true, processed: ok + fail, ok, fail, skipped };
   } finally {
     _running = false;
   }

@@ -172,5 +172,6 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | 새 가입자에게 알림 안 옴 | `RESEND_API_KEY`/`WEBHOOK_SECRET` 확인. Database Webhook 활성 상태 |
 | `/admin/users`에서 사용자 안 보임 | 005 RPC 미적용 또는 호출자 role≠admin |
 | 동기화 큐가 안 줄어듦 | `/queue`에서 `last_error` 확인. 최다 발생: RLS 차단(역할/지역), 네트워크 |
+| 큐 항목이 "자동 재시도 중단" 상태 | 5회 연속 실패 시 자동 재시도가 멈춤. 원인(보통 RLS 권한·필수 컬럼 누락) 해결 후 `/queue`에서 [지금 재시도]. 데이터를 포기하려면 [큐에서 제거] |
 | PWA 설치 안 됨 | HTTPS 필요. Vercel 도메인에서 시도. `public/icons/*.png` 존재 확인 |
 | 사진은 올라갔는데 표시 안 됨 | `photos.storage_path`와 Storage 객체 경로 일치 여부, RLS `photos_read` |
