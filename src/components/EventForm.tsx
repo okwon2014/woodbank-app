@@ -102,10 +102,47 @@ export function EventForm(props: Props) {
   const [gpsAcc, setGpsAcc] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeMsg, setGeocodeMsg] = useState<string | null>(null);
 
   // 입력값 변화 helper
   function update<K extends keyof State>(k: K, v: State[K]) {
     setState((s) => ({ ...s, [k]: v }));
+  }
+
+  // 현재 lat/lon 으로 주소(시도/시군구/시군구코드/장소상세) 자동 채우기.
+  // 비어 있는 필드만 채워서 사용자가 손으로 적어둔 값은 보존한다.
+  async function fillAddressFromCoords() {
+    if (state.lat == null || state.lon == null) {
+      setGeocodeMsg("먼저 위치를 가져오세요.");
+      return;
+    }
+    setGeocoding(true);
+    setGeocodeMsg(null);
+    try {
+      const res = await fetch(`/api/geocode/reverse?lat=${state.lat}&lon=${state.lon}`);
+      if (!res.ok) throw new Error(`주소 조회 실패 (${res.status})`);
+      const j = await res.json();
+      const filled: string[] = [];
+      setState((s) => {
+        const next = { ...s };
+        if (!s.region_sido && j.sido) { next.region_sido = j.sido; filled.push("시도"); }
+        if (!s.region_sigungu && j.sigungu) { next.region_sigungu = j.sigungu; filled.push("시군구"); }
+        if (!s.region_sigungu_code && j.sigungu_code) { next.region_sigungu_code = j.sigungu_code; filled.push("시군구코드"); }
+        if (!s.address_detail && j.address_detail) { next.address_detail = j.address_detail; filled.push("장소 상세"); }
+        return next;
+      });
+      const src = j.source === "vworld" ? "VWorld" : j.source === "nominatim" ? "OSM Nominatim" : "(소스 없음)";
+      setGeocodeMsg(
+        filled.length > 0
+          ? `${src}에서 ${filled.join(" · ")}를 채웠습니다.`
+          : `${src} 조회 완료 — 비어 있는 필드가 없어 변경하지 않았습니다.`,
+      );
+    } catch (e: any) {
+      setGeocodeMsg(e?.message ?? "주소 조회 실패");
+    } finally {
+      setGeocoding(false);
+    }
   }
 
   // sample_no 자동 추천
@@ -330,6 +367,17 @@ export function EventForm(props: Props) {
             setGpsAcc(v.accuracy);
           }}
         />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={fillAddressFromCoords}
+            disabled={geocoding || state.lat == null || state.lon == null}
+          >
+            {geocoding ? "주소 조회 중…" : "🏷 좌표로 주소 채우기"}
+          </button>
+          {geocodeMsg && <span className="text-xs text-stone-600">{geocodeMsg}</span>}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="field-label">해발고 (m)</span>

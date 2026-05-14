@@ -125,7 +125,7 @@ woodbank-app/
 | 높음 | 역할 가드 일관화 + 403 페이지 | ✅ `requireRole()` + `/forbidden` ([src/lib/auth/guard.ts](src/lib/auth/guard.ts)) |
 | 중간 | MapLibre 지도 뷰 | ✅ `/sites?view=map` — OSM 타일 + 개체목 마커, 클릭 시 상세로 이동 |
 | 중간 | CSV 내보내기 | ✅ UTF-8(BOM) CSV — [src/lib/export/csv.ts](src/lib/export/csv.ts) |
-| 중간 | 한국어 행정구역 reverse geocoding | 미구현 — VWorld API 등 연동 |
+| 중간 | 한국어 행정구역 reverse geocoding | ✅ VWorld(키 있을 때) + OSM Nominatim fallback — [src/lib/geocode/reverse.ts](src/lib/geocode/reverse.ts), `/events/new` 의 「좌표로 주소 채우기」 |
 | 낮음 | DNA 분석 결과 테이블 + 업로드 | 부분 — 필드는 있고 결과 업로드 미구현 |
 
 ## 6.1 사용자 관리 강화 기능 셋업 (선택)

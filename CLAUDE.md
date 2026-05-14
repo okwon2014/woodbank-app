@@ -85,6 +85,7 @@ public/{sw.js, manifest.webmanifest, icons/}
 | `WEBHOOK_SECRET` | 운영 | Supabase Database Webhook 검증 |
 | `NEXT_PUBLIC_SITE_URL` | 운영 | 이메일 redirect 기준 도메인 |
 | `RESEND_FROM_EMAIL` | 선택 | 검증된 발신 도메인 |
+| `VWORLD_API_KEY` | 선택 | 좌표→주소 자동 채우기(서버 전용). 미설정 시 OSM Nominatim fallback |
 
 ## 코드 컨벤션
 

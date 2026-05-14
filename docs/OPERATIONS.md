@@ -78,6 +78,7 @@ on conflict (id) do update set role = 'admin', active = true;
 | `RESEND_FROM_EMAIL` | 운영 | 선택 | 검증된 발신 도메인. 미설정 시 `onboarding@resend.dev` |
 | `WEBHOOK_SECRET` | 운영 | 선택 | Supabase Webhook 검증용 32자 이상 임의 문자열 |
 | `NEXT_PUBLIC_SITE_URL` | 운영 | 선택 | 이메일 redirect 도메인 기준 |
+| `VWORLD_API_KEY` | 운영(서버) | 선택 | 좌표→주소 자동 채우기. 미설정 시 OSM Nominatim fallback |
 
 로컬은 `.env.local`(gitignore 됨). 예시는 [.env.example](../.env.example).
 
