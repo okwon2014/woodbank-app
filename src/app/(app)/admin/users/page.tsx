@@ -1,14 +1,12 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUserAndRole } from "@/lib/auth/role";
+import { requireRole } from "@/lib/auth/guard";
 import { UserManager } from "@/components/UserManager";
 import { InviteUserForm } from "@/components/InviteUserForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
-  const { role } = await getCurrentUserAndRole();
-  if (role !== "admin") redirect("/sites");
+  await requireRole(["admin"]);
 
   return (
     <div className="space-y-4">

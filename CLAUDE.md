@@ -62,8 +62,8 @@ public/{sw.js, manifest.webmanifest, icons/}
 - 5단계: `admin / lead / surveyor / collaborator / guest`
 - `users_meta.role` + `user_region_assignments(sigungu_code, role)`로 RLS 결정
 - 신규 가입자는 트리거로 `guest` 자동 생성 ([005_admin_helpers.sql](supabase/migrations/005_admin_helpers.sql))
-- 서버 가드: 라우트 페이지 상단에서 `getCurrentUserAndRole()` 호출, role 부족 시 `redirect`
-- RLS가 1차 보안. 프론트 가드는 UX 위주.
+- 서버 가드: 라우트 페이지 상단에서 `await requireRole(["admin", ...])` ([src/lib/auth/guard.ts](src/lib/auth/guard.ts)) — 권한 부족 시 친절한 403 페이지(`/forbidden`)로 redirect
+- RLS가 1차 보안. 프론트 가드는 UX 위주(빠른 차단·안내).
 
 ## RLS 변경 시 체크리스트
 
@@ -106,6 +106,6 @@ public/{sw.js, manifest.webmanifest, icons/}
 ## 작업 시 권장
 
 - 새 기능 → 가능하면 `(app)` 그룹 안에. 인증 미들웨어가 자동 적용됨.
-- 새 admin 전용 화면 → `(app)/admin/` 아래. 페이지 상단에서 `role !== 'admin' && redirect("/sites")` 가드 필수 (RLS도 이중으로 보장).
+- 새 admin 전용 화면 → `(app)/admin/` 아래. 페이지 상단에서 `await requireRole(["admin"])` (또는 lead 포함). RLS도 이중으로 보장.
 - 새 마이그레이션 → 번호 순서대로, 가능하면 `if not exists` / `drop ... if exists`로 재실행 안전하게.
 - 동기화 큐 페이로드 형태 변경 시 → 기존 큐에 남아 있는 항목이 깨질 수 있음. payload에 `version` 필드 두는 것이 안전.
