@@ -125,19 +125,47 @@ async function MapView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServer
   // 진단용: GPS 없는 개체목 / RLS 로 가려진 site 가 있을 때 어디서 막혔는지 노출.
   const totalTreesWithGps = treeRows.length;
   const visibleSites = sitesMap.size;
+  // 좌표 범위 — 마커를 어디서 찾아야 할지 사용자가 즉시 알도록.
+  const lats = markers.map((m) => m.lat);
+  const lons = markers.map((m) => m.lon);
+  const bbox =
+    markers.length > 0
+      ? {
+          minLat: Math.min(...lats),
+          maxLat: Math.max(...lats),
+          minLon: Math.min(...lons),
+          maxLon: Math.max(...lons),
+        }
+      : null;
+  // 한반도 범위(33–39, 124–132) 벗어난 마커 — 잘못된 좌표 입력 의심
+  const outOfKorea = markers.filter(
+    (m) => m.lat < 33 || m.lat > 39 || m.lon < 124 || m.lon > 132,
+  );
 
   return (
     <>
       {error && <p className="text-rose-600 text-sm">{error.message}</p>}
       <SitesMapView markers={markers} />
-      <p className="text-xs text-stone-500">
-        ※ 좌표가 입력된 개체목 {markers.length}건을 표시합니다. 배경 지도는 OpenStreetMap.
-        {totalTreesWithGps > 0 && visibleSites === 0 && (
-          <>
-            {" "}<span className="text-amber-700">⚠️ trees 는 {totalTreesWithGps}건 가져왔지만 연결된 sites 가 보이지 않습니다. RLS 권한 또는 데이터 불일치 가능성 — 운영자에게 알려주세요.</span>
-          </>
+      <div className="text-xs text-stone-500 space-y-1">
+        <p>
+          ※ 좌표가 입력된 개체목 <b>{markers.length}건</b>을 표시합니다. 배경 지도는 OpenStreetMap.
+          {totalTreesWithGps > 0 && visibleSites === 0 && (
+            <>
+              {" "}<span className="text-amber-700">⚠️ trees 는 {totalTreesWithGps}건 가져왔지만 연결된 sites 가 보이지 않습니다. RLS 권한 또는 데이터 불일치 가능성.</span>
+            </>
+          )}
+        </p>
+        {bbox && (
+          <p className="font-mono text-stone-400">
+            좌표 범위: 위도 {bbox.minLat.toFixed(4)}–{bbox.maxLat.toFixed(4)} · 경도 {bbox.minLon.toFixed(4)}–{bbox.maxLon.toFixed(4)}
+          </p>
         )}
-      </p>
+        {outOfKorea.length > 0 && (
+          <p className="text-rose-700">
+            ⚠️ 한반도 범위(33–39°N, 124–132°E)를 벗어난 좌표 {outOfKorea.length}건이 있습니다. 첫 건: {outOfKorea[0].site_code} #{outOfKorea[0].tree_local_no} ({outOfKorea[0].lat.toFixed(5)}, {outOfKorea[0].lon.toFixed(5)}) — 잘못 입력됐을 가능성을 확인하세요.
+          </p>
+        )}
+      </div>
     </>
   );
 }

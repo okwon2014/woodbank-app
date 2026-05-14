@@ -109,24 +109,58 @@ export function SitesMapView({ markers }: Props) {
 
       const bounds = new lib.LngLatBounds();
       for (const m of markers) {
-        const el = document.createElement("button");
-        el.className =
-          "wb-tree-marker w-3 h-3 rounded-full border-2 border-white shadow ring-1 ring-stone-900/30 cursor-pointer";
-        el.style.background = "#235a3f";
-        el.title = `${m.site_code} #${m.tree_local_no} · ${m.species_ko ?? ""}`;
-        el.addEventListener("click", (e) => {
+        // 마커 + 옆에 라벨을 함께 그린다. 라이브 화면이 작은 점만 있어 안 보이는
+        // 문제가 있었어서 강한 대비 색·외곽선·라벨 기본 표시로.
+        const wrap = document.createElement("div");
+        wrap.className = "wb-tree-marker";
+        wrap.style.display = "flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "4px";
+        wrap.style.cursor = "pointer";
+        wrap.style.transform = "translateY(-2px)"; // dot 가운데가 정확히 좌표 위에 오도록
+
+        const dot = document.createElement("span");
+        dot.style.width = "16px";
+        dot.style.height = "16px";
+        dot.style.borderRadius = "50%";
+        dot.style.background = "#dc2626";        // rose-600 — OSM 녹지 위에서 가장 잘 보이는 색
+        dot.style.border = "3px solid #ffffff";
+        dot.style.boxShadow = "0 1px 4px rgba(0,0,0,0.5)";
+        dot.style.flex = "0 0 auto";
+        wrap.appendChild(dot);
+
+        if (showLabels) {
+          const label = document.createElement("span");
+          label.textContent = `${m.site_code} #${m.tree_local_no}`;
+          label.style.fontSize = "11px";
+          label.style.fontWeight = "600";
+          label.style.padding = "1px 5px";
+          label.style.borderRadius = "4px";
+          label.style.background = "rgba(255,255,255,0.95)";
+          label.style.color = "#1c1917";
+          label.style.border = "1px solid rgba(0,0,0,0.15)";
+          label.style.whiteSpace = "nowrap";
+          label.style.boxShadow = "0 1px 3px rgba(0,0,0,0.2)";
+          wrap.appendChild(label);
+        }
+
+        wrap.title = `${m.site_code} #${m.tree_local_no} · ${m.species_ko ?? ""} (${m.lat.toFixed(5)}, ${m.lon.toFixed(5)})`;
+        wrap.addEventListener("click", (e) => {
           e.stopPropagation();
           router.push(`/trees/${m.id}`);
         });
 
-        new lib.Marker({ element: el })
+        new lib.Marker({ element: wrap, anchor: "left" })
           .setLngLat([m.lon, m.lat])
           .setPopup(
-            new lib.Popup({ offset: 12, closeButton: false }).setHTML(
+            new lib.Popup({ offset: 16, closeButton: false }).setHTML(
               `<div style="font-size:12px;line-height:1.4">
                 <div><b>${escapeHtml(m.site_code)}</b> #${escapeHtml(m.tree_local_no)}</div>
                 <div style="color:#666">${escapeHtml(m.region_sigungu ?? "")}</div>
                 ${m.species_ko ? `<div>${escapeHtml(m.species_ko)}</div>` : ""}
+                <div style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#888;margin-top:2px">
+                  ${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}
+                </div>
                 <div style="margin-top:4px;color:#235a3f">클릭하여 상세 보기 →</div>
               </div>`,
             ),
@@ -136,9 +170,11 @@ export function SitesMapView({ markers }: Props) {
         bounds.extend([m.lon, m.lat]);
       }
       if (markers.length === 1) {
-        map.flyTo({ center: [markers[0].lon, markers[0].lat], zoom: 14, duration: 600 });
+        map.flyTo({ center: [markers[0].lon, markers[0].lat], zoom: 16, duration: 600 });
       } else {
-        map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
+        // padding 을 키워 가장자리 마커가 컨트롤·toolbar 에 가리지 않게 하고,
+        // 너무 멀리 zoom out 되지 않게 maxZoom 약간 낮춤.
+        map.fitBounds(bounds, { padding: { top: 80, right: 60, bottom: 60, left: 60 }, maxZoom: 16, duration: 600 });
       }
     };
 
@@ -174,27 +210,33 @@ export function SitesMapView({ markers }: Props) {
       ctx.drawImage(source, 0, 0);
 
       // 3) 마커 합성 — DOM Marker 는 캔버스 밖이라 별도로 그린다.
+      //    화면 디자인과 동일하게 빨간 점 + 흰 외곽선 + 그림자.
       for (const m of markers) {
         const p = map.project([m.lon, m.lat]);
         const x = p.x * dpr;
         const y = p.y * dpr;
-        const r = 7 * dpr;
+        const r = 8 * dpr;
+        // 그림자
+        ctx.beginPath();
+        ctx.arc(x, y + 1 * dpr, r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fill();
+        // 빨간 점
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = "#235a3f";
+        ctx.fillStyle = "#dc2626";
         ctx.fill();
-        ctx.lineWidth = 2 * dpr;
-        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3 * dpr;
+        ctx.strokeStyle = "#ffffff";
         ctx.stroke();
 
         if (showLabels) {
           const label = `${m.site_code} #${m.tree_local_no}`;
-          ctx.font = `${11 * dpr}px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+          ctx.font = `bold ${11 * dpr}px -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
           ctx.textBaseline = "middle";
-          // 흰 외곽선 → 작은 검은 글자 (가독성)
           const tx = x + r + 4 * dpr;
           const ty = y;
-          ctx.lineWidth = 3 * dpr;
+          ctx.lineWidth = 4 * dpr;
           ctx.strokeStyle = "rgba(255,255,255,0.95)";
           ctx.strokeText(label, tx, ty);
           ctx.fillStyle = "#1c1917";
