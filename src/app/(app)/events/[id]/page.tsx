@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
+import { DnaResultManager } from "@/components/DnaResultManager";
 import { ClickableThumbnail } from "@/components/PhotoLightbox";
 import type { PhotoCategory } from "@/types/db";
 
@@ -155,6 +156,9 @@ export default async function EventDetailPage({ params }: { params: { id: string
           )}
         </section>
       )}
+
+      {/* DNA 분석 결과 — admin/lead 가 결과 등록·삭제 가능, 나머지는 read-only */}
+      <DnaResultManager eventId={event.id} canWrite={role === "admin" || role === "lead"} />
 
       {/* 사진 — 클릭 시 라이트박스로 원본+EXIF 보기 */}
       <section>

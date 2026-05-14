@@ -98,7 +98,7 @@ public/{sw.js, manifest.webmanifest, icons/}
 
 ## 흔한 함정
 
-- **마이그레이션 누락**: 005까지 모두 적용해야 `/admin/users`(RPC 의존)·신규 가입 트리거 동작.
+- **마이그레이션 누락**: 005까지 모두 적용해야 `/admin/users`(RPC 의존)·신규 가입 트리거 동작. 006 미적용 시 야장 상세 화면의 DNA 결과 섹션이 빈 채로 보인다.
 - **`photos` 버킷 미생성**: 003 마이그레이션이 만듦. "Bucket not found" 오류면 003 누락.
 - **`user_region_assignments` 비어 있음**: lead/surveyor가 RLS로 차단됨. SQL이나 `/admin/users`에서 매핑 필수.
 - **service_role 키 유출**: RLS 우회 슈퍼유저 키. Vercel 환경변수에만, Production·Preview만 체크. Development는 미체크하고 로컬은 `.env.local` 사용.

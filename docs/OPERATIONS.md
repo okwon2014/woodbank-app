@@ -25,6 +25,7 @@
    - `supabase/migrations/003_storage_and_triggers.sql`
    - `supabase/migrations/004_seed.sql` (수종·행정구역 마스터·샘플 시드)
    - `supabase/migrations/005_admin_helpers.sql` (사용자 자동 생성 트리거 + admin RPC)
+   - `supabase/migrations/006_dna_results.sql` (DNA 분석 결과 테이블 + dna Storage 버킷)
 3. **Storage** → `photos` 버킷이 자동 생성되었는지 확인 (003에서 생성).
 4. **Project Settings → API**:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
@@ -178,6 +179,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | "서버 충돌" 빨간 배지 | Postgres unique·check 제약 위반(예: `sample_no` 중복). 같은 페이로드로 재시도해도 또 실패. 채취번호를 고친 새 야장으로 다시 저장하거나, 충돌 항목은 [큐에서 제거] |
 | PWA 설치 안 됨 | HTTPS 필요. Vercel 도메인에서 시도. `public/icons/*.png` 존재 확인 |
 | 사진은 올라갔는데 표시 안 됨 | `photos.storage_path`와 Storage 객체 경로 일치 여부, RLS `photos_read` |
+| "DNA 분석 결과" 섹션이 빈 상태로 보임 | 006 마이그레이션 미적용. `dna_results` 테이블·`dna` 버킷 생성 확인. RLS 상 admin/lead 만 작성 가능 |
 
 ## 9. 의존성 보안
 
