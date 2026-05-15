@@ -35,7 +35,8 @@ src/
 │   ├── (app)/           # 인증 필요 — layout이 세션 보장
 │   │   ├── sites|trees|events|profile|queue/
 │   │   └── admin/{users,import,export,export/print}/
-│   │   └── stats/                # 통계 대시보드 (RLS 권한 범위 내)
+│   │   ├── stats/                # 통계 대시보드 (RLS 권한 범위 내)
+│   │   └── specimens/            # 시편 추적 (상세·라벨 인쇄). 야장에서 파생되는 모든 시편(D/C/B/L/T/F/X/R/O) 다단계 계층
 │   ├── api/admin/invite/        # service_role 키로 이메일 초대
 │   ├── api/webhooks/new-user/   # Resend로 admin에게 가입 알림
 │   ├── auth/{reset,update}-password/
@@ -108,7 +109,7 @@ public/{sw.js, manifest.webmanifest, icons/}
 
 ## 흔한 함정
 
-- **마이그레이션 누락**: 005까지 모두 적용해야 `/admin/users`(RPC 의존)·신규 가입 트리거 동작. 006 미적용 시 야장 상세 화면의 DNA 결과 섹션이 빈 채로 보인다.
+- **마이그레이션 누락**: 005까지 모두 적용해야 `/admin/users`(RPC 의존)·신규 가입 트리거 동작. 006 미적용 시 야장 상세의 DNA 결과 섹션, 007 미적용 시 시편 섹션이 동작하지 않는다.
 - **`photos` 버킷 미생성**: 003 마이그레이션이 만듦. "Bucket not found" 오류면 003 누락.
 - **`user_region_assignments` 비어 있음**: lead/surveyor가 RLS로 차단됨. SQL이나 `/admin/users`에서 매핑 필수.
 - **service_role 키 유출**: RLS 우회 슈퍼유저 키. Vercel 환경변수에만, Production·Preview만 체크. Development는 미체크하고 로컬은 `.env.local` 사용.

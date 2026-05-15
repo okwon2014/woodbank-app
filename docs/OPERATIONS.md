@@ -26,6 +26,7 @@
    - `supabase/migrations/004_seed.sql` (수종·행정구역 마스터·샘플 시드)
    - `supabase/migrations/005_admin_helpers.sql` (사용자 자동 생성 트리거 + admin RPC)
    - `supabase/migrations/006_dna_results.sql` (DNA 분석 결과 테이블 + dna Storage 버킷)
+   - `supabase/migrations/007_specimens.sql` (시편 추적성 — disc/core/block/slide/tree-ring/fiber/extract/residue 다단계 계층 + create_specimen RPC)
 3. **Storage** → `photos` 버킷이 자동 생성되었는지 확인 (003에서 생성).
 4. **Project Settings → API**:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
@@ -185,6 +186,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | PWA 설치 안 됨 | HTTPS 필요. Vercel 도메인에서 시도. `public/icons/*.png` 존재 확인 |
 | 사진은 올라갔는데 표시 안 됨 | `photos.storage_path`와 Storage 객체 경로 일치 여부, RLS `photos_read` |
 | "DNA 분석 결과" 섹션이 빈 상태로 보임 | 006 마이그레이션 미적용. `dna_results` 테이블·`dna` 버킷 생성 확인. RLS 상 admin/lead 만 작성 가능 |
+| "시편(Specimens)" 섹션이 에러 / 추가 안 됨 | 007 마이그레이션 미적용. `specimens` 테이블·`create_specimen` RPC 확인. 쓰기 권한은 admin/lead. 같은 부모에서 동시 추가 시 `23505` 발생하면 클라이언트가 한 번 더 시도하면 됨 |
 
 ## 9. 의존성 보안
 
