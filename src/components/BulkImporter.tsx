@@ -29,6 +29,42 @@ const COLUMNS = [
 ] as const;
 type Col = (typeof COLUMNS)[number];
 
+// /admin/export 의 Excel/CSV 가 만들어내는 한국어 헤더를 받아 그대로 import 할 수 있게
+// 매핑한다. 사용자가 export 한 파일을 손대지 않고 BulkImporter 에 붙여 넣을 수 있어
+// 일관성이 생긴다. 영문 헤더(기본)는 그대로 인식되고, 한국어 헤더는 여기서 정규화된다.
+// 미지원 컬럼(예: "사진수", "조사자", DD 좌표)은 무시 — Export 의 1행 = 1야장 평탄화
+// 와 호환됨.
+const HEADER_ALIASES: Record<string, Col> = {
+  "채취번호": "sample_no",
+  "채취일": "sampled_at",
+  "지점코드": "site_code",
+  "시도": "region_sido",
+  "시군구": "region_sigungu",
+  "시군구코드": "region_sigungu_code",
+  "장소상세": "address_detail",
+  "지형": "habitat_terrain",
+  "개체목번호": "tree_local_no",
+  // species 는 한글명 컬럼. Export 는 코드+국명 둘 다 내보내는데 우리는 국명만 사용.
+  "국명": "species",
+  "수종": "species",
+  "수종코드": "species", // 코드만 있어도 받아준다(아래 validate 에서 마스터 확인)
+  "위도(DMS)": "lat_dms",
+  "경도(DMS)": "lon_dms",
+  "해발고(m)": "elevation_m",
+  "방위(°)": "aspect_deg",
+  "수고(m)": "height_m",
+  "DBH(cm)": "dbh_cm",
+  "DNA채취": "dna_collected",
+  "DNA라벨": "dna_sample_code",
+  "특기사항": "notes",
+};
+
+function normalizeHeader(raw: string): Col | null {
+  const trimmed = raw.trim();
+  if (COLUMNS.includes(trimmed as Col)) return trimmed as Col;
+  return HEADER_ALIASES[trimmed] ?? null;
+}
+
 const REQUIRED: Col[] = [
   "sample_no", "sampled_at", "site_code", "region_sigungu_code",
   "tree_local_no", "species", "lat_dms", "lon_dms", "height_m", "dbh_cm",
@@ -64,20 +100,29 @@ function parseTsv(text: string): { header: string[]; rows: Row[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return { header: [], rows: [] };
   const header = lines[0].split("\t").map((s) => s.trim());
+  // 영문 그대로 또는 한국어 별칭을 영문 키로 정규화. 미지원 컬럼은 null.
+  const headerCols: Array<Col | null> = header.map(normalizeHeader);
 
   const rows: Row[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cells = lines[i].split("\t");
     const values: Partial<Record<Col, string>> = {};
-    header.forEach((h, j) => {
-      if (COLUMNS.includes(h as Col)) {
-        const v = (cells[j] ?? "").trim();
-        if (v) values[h as Col] = v;
-      }
+    headerCols.forEach((col, j) => {
+      if (!col) return;
+      const v = (cells[j] ?? "").trim();
+      if (v) values[col] = v;
     });
     rows.push({ rowIndex: i, values, errors: [], warnings: [] });
   }
   return { header, rows };
+}
+
+function parseBool(raw: string | undefined): boolean | null {
+  if (!raw) return null;
+  const s = raw.trim().toLowerCase();
+  if (s === "true" || s === "1" || s === "y" || s === "yes") return true;
+  if (s === "false" || s === "0" || s === "n" || s === "no") return false;
+  return null;
 }
 
 // ----- 검증 -----
@@ -112,8 +157,8 @@ function validate(row: Row, speciesByName: Map<string, string>) {
     row.warnings.push(`수종 '${v.species}'은(는) species 마스터에 없음 → species_code 비움`);
   }
 
-  if (v.dna_collected && !/^(true|false|0|1)$/i.test(v.dna_collected))
-    row.errors.push("dna_collected는 true/false");
+  if (v.dna_collected && parseBool(v.dna_collected) === null)
+    row.errors.push("dna_collected는 true/false/Y/N 중 하나여야 합니다");
 }
 
 // ----- 본 컴포넌트 -----
@@ -240,7 +285,6 @@ export function BulkImporter() {
     // 7) events upsert — 기존 sample_no는 덮어쓰기
     const eventRows = okRows.map((r) => {
       const treeId = treeByKey.get(treeKeyOf(r.values.site_code!, r.values.tree_local_no!))!.id;
-      const dna = (r.values.dna_collected ?? "false").toLowerCase();
       return {
         id: uuidv7(),
         tree_id: treeId,
@@ -248,7 +292,7 @@ export function BulkImporter() {
         sampled_at: r.values.sampled_at!,
         height_m: r.values.height_m ? parseFloat(r.values.height_m) : null,
         dbh_cm: r.values.dbh_cm ? parseFloat(r.values.dbh_cm) : null,
-        dna_collected: dna === "true" || dna === "1",
+        dna_collected: parseBool(r.values.dna_collected) ?? false,
         dna_sample_code: r.values.dna_sample_code || null,
         notes: r.values.notes || null,
         surveyor_id: uid,
@@ -297,6 +341,11 @@ export function BulkImporter() {
           </code>
           <p className="text-xs text-stone-500 mt-1">
             필수: {REQUIRED.join(", ")}
+          </p>
+          <p className="text-xs text-stone-500 mt-2">
+            <b>한국어 헤더도 자동 인식</b>됩니다 — 「채취번호 / 채취일 / 지점코드 / 시도 / 시군구 / 시군구코드 / 장소상세 / 지형 / 개체목번호 / 국명 / 위도(DMS) / 경도(DMS) / 해발고(m) / 방위(°) / 수고(m) / DBH(cm) / DNA채취 / DNA라벨 / 특기사항」.
+            <code>/admin/export</code> 에서 받은 Excel/CSV 를 그대로 붙여 넣어도 동작합니다.
+            DNA채취 값은 <code>true/false/Y/N/1/0</code> 모두 인식.
           </p>
         </details>
       </div>
