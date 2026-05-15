@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
@@ -17,6 +17,18 @@ function LoginContent() {
   const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect") || "/sites";
+
+  // 옛 매직링크 호환 — /login?code=...&redirect=/sites 로 들어온 경우(middleware 가
+  // 보호 경로 /sites?code=... 를 가로채면서 생기는 흐름)는 자동으로 /auth/callback 으로
+  // forward 해 code 를 세션으로 교환한다. 이렇게 하면 fix 머지 전에 발송된 메일도
+  // 다시 발송 없이 그대로 사용 가능.
+  useEffect(() => {
+    const code = params.get("code");
+    if (code) {
+      router.replace(`/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(redirect)}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
@@ -35,12 +47,15 @@ function LoginContent() {
         if (error) throw error;
         router.replace(redirect);
       } else {
+        // 매직링크는 PKCE flow — Supabase 가 ?code 파라미터로 보내고
+        // /auth/callback 이 code 를 세션으로 교환한 뒤 next 로 redirect.
+        const callbackUrl = `${location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`;
         const { error } = await sb.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: `${location.origin}${redirect}` },
+          options: { emailRedirectTo: callbackUrl },
         });
         if (error) throw error;
-        setMsg("메일로 로그인 링크를 보냈습니다. 메일함을 확인해주세요.");
+        setMsg("메일로 로그인 링크를 보냈습니다. 메일함(스팸함 포함)을 확인해주세요. 링크는 한 번만 사용 가능합니다.");
       }
     } catch (e: any) {
       setMsg(e?.message ?? "로그인에 실패했습니다.");

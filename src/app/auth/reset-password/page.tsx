@@ -15,8 +15,10 @@ export default function ResetRequestPage() {
     setBusy(true); setMsg(null); setErr(null);
     try {
       const sb = getSupabaseBrowser();
+      // PKCE — /auth/callback 이 code 를 세션으로 교환한 뒤 update-password 로 redirect.
+      // update-password 페이지는 PASSWORD_RECOVERY 또는 기존 세션을 보고 폼을 활성화한다.
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: `${location.origin}/auth/update-password`,
+        redirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent("/auth/update-password")}`,
       });
       if (error) throw error;
       setMsg("재설정 링크를 메일로 보냈습니다. 메일함을 확인해 주세요.");
