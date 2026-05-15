@@ -71,6 +71,55 @@ export interface PhotoMeta {
   uploaded_at: string;
 }
 
+export type SpecimenTypeCode = "D" | "C" | "B" | "L" | "T" | "F" | "X" | "R" | "O";
+export type SpecimenStatus = "active" | "consumed" | "lost" | "destroyed";
+
+export interface SpecimenType {
+  code: SpecimenTypeCode;
+  key: string; // specimen_type 컬럼 값
+  ko: string;
+  en: string;
+  description: string;
+}
+
+// 시편 종류 마스터 — 마이그레이션 007 의 분류와 동일하게 유지.
+export const SPECIMEN_TYPES: SpecimenType[] = [
+  { code: "D", key: "disc",      ko: "디스크",      en: "Disc",       description: "줄기 또는 가지를 가로로 잘라낸 원판" },
+  { code: "C", key: "core",      ko: "증분코어",    en: "Core",       description: "Increment borer 등으로 채취한 막대형 시추" },
+  { code: "B", key: "block",     ko: "블록",        en: "Block",      description: "디스크/코어에서 잘라낸 작은 토막" },
+  { code: "L", key: "slide",     ko: "현미경 슬라이드", en: "Slide",   description: "박편/영구 슬라이드" },
+  { code: "T", key: "tree_ring", ko: "연륜표본",    en: "Tree-ring",  description: "연륜 측정·교차연대측정용" },
+  { code: "F", key: "fiber",     ko: "해리 섬유",   en: "Fiber",      description: "해리된 단섬유 표본" },
+  { code: "X", key: "extract",   ko: "추출물",      en: "Extract",    description: "DNA·화학 추출물" },
+  { code: "R", key: "residue",   ko: "잔여 보존",   en: "Residue",    description: "분석 후 남은 보관용" },
+  { code: "O", key: "other",     ko: "기타",        en: "Other",      description: "위에 없는 분류" },
+];
+
+export const SPECIMEN_STATUSES: { value: SpecimenStatus; ko: string }[] = [
+  { value: "active",    ko: "보관 중" },
+  { value: "consumed",  ko: "소진" },
+  { value: "lost",      ko: "분실" },
+  { value: "destroyed", ko: "폐기" },
+];
+
+export interface Specimen {
+  id: string;
+  human_code: string;
+  parent_id: string | null;
+  root_event_id: string;
+  specimen_type: string;
+  type_code: SpecimenTypeCode;
+  seq_no: number;
+  description: string | null;
+  storage_location: string | null;
+  status: SpecimenStatus;
+  external_id: string | null;
+  external_namespace: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DnaResult {
   id: string;
   event_id: string;

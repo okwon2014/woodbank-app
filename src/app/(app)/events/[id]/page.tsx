@@ -4,6 +4,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { DnaResultManager } from "@/components/DnaResultManager";
+import { SpecimenManager } from "@/components/SpecimenManager";
 import { ClickableThumbnail } from "@/components/PhotoLightbox";
 import type { PhotoCategory } from "@/types/db";
 
@@ -157,6 +158,14 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           )}
         </section>
       )}
+
+      {/* 시편(specimens) — 야장에서 파생되는 모든 물리적 시편(디스크/블록/슬라이드/연륜표본/해리섬유/추출물 등) 의 다단계 트리.
+          쓰기는 admin/lead 만 (사용자 정책). human_code 는 서버 RPC 가 자동 생성. */}
+      <SpecimenManager
+        eventId={event.id}
+        sampleNo={event.sample_no}
+        canWrite={role === "admin" || role === "lead"}
+      />
 
       {/* DNA 분석 결과 — admin/lead 가 결과 등록·삭제 가능, 나머지는 read-only */}
       <DnaResultManager eventId={event.id} canWrite={role === "admin" || role === "lead"} />
