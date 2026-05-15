@@ -203,14 +203,15 @@ export default async function StatsPage() {
           {/* 월별 시계열 */}
           <section>
             <Card title="월별 야장 등록 (최근 12개월)">
-              <div className="flex items-end gap-1 h-32">
+              <div className="flex items-end gap-1 h-40">
                 {monthly.map((m) => {
-                  const h = m.count === 0 ? 2 : Math.max(4, (m.count / maxMonthly) * 100);
+                  // 막대 영역(약 96px) 기준 픽셀 높이. 0 건은 2px(흔적), 그 외는 최소 4px 보장.
+                  const heightPx = m.count === 0 ? 2 : Math.max(4, Math.round((m.count / maxMonthly) * 96));
                   return (
-                    <div key={m.ym} className="flex flex-col items-center flex-1 min-w-0">
+                    <div key={m.ym} className="flex flex-col items-center flex-1 min-w-0 h-full justify-end">
                       <div
                         className="w-full bg-brand-700 rounded-t"
-                        style={{ height: `${h}%` }}
+                        style={{ height: `${heightPx}px` }}
                         title={`${m.ym}: ${m.count}건`}
                       />
                       <div className="text-[10px] text-stone-500 mt-1 truncate w-full text-center">
@@ -337,15 +338,18 @@ function BarChart({
   bins: Array<{ label: string; count: number }>;
   max: number;
 }) {
+  // 막대 height 를 px 로 직접 계산 — 부모의 % 기준 height resolution 이 column flex
+  // 안에서 불안정하던 문제(0px로 안 보임)를 우회. column 에 h-full + justify-end 로
+  // 막대가 컨테이너 바닥에서 위로 자라도록.
   return (
-    <div className="flex items-end gap-1 h-32">
+    <div className="flex items-end gap-1 h-40">
       {bins.map((b) => {
-        const h = b.count === 0 ? 2 : Math.max(4, (b.count / max) * 100);
+        const heightPx = b.count === 0 ? 2 : Math.max(4, Math.round((b.count / max) * 96));
         return (
-          <div key={b.label} className="flex flex-col items-center flex-1 min-w-0">
+          <div key={b.label} className="flex flex-col items-center flex-1 min-w-0 h-full justify-end">
             <div
-              className="w-full bg-brand-500/80 rounded-t"
-              style={{ height: `${h}%` }}
+              className="w-full bg-brand-500 rounded-t"
+              style={{ height: `${heightPx}px` }}
               title={`${b.label}: ${b.count}건`}
             />
             <div className="text-[10px] text-stone-500 mt-1 truncate w-full text-center">{b.label}</div>
