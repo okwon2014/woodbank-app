@@ -123,7 +123,7 @@ export default async function StatsPage() {
         <KpiCard label="개체목 Trees" value={treeCount ?? 0} />
         <KpiCard label="야장 Events" value={eventCount ?? 0} />
         <KpiCard label="사진 Photos" value={photoCount ?? 0} />
-        <KpiCard label="DNA 결과" value={dnaCount ?? 0} />
+        <KpiCard label="DNA 분석 결과" value={dnaCount ?? 0} />
       </div>
 
       {joined.length === 0 && (

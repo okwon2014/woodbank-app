@@ -25,6 +25,7 @@
    5. `supabase/migrations/005_admin_helpers.sql`
    6. `supabase/migrations/006_dna_results.sql`
    7. `supabase/migrations/007_specimens.sql`
+   8. `supabase/migrations/008_dna_to_specimens.sql`
 3. **Storage** → `photos` 버킷이 생성되었는지 확인. (003 스크립트가 자동 생성)
 4. **Project Settings → API** 에서 다음 두 값을 복사:
    - `Project URL` → `.env.local` 의 `NEXT_PUBLIC_SUPABASE_URL`
@@ -131,7 +132,7 @@ woodbank-app/
 | 중간 | MapLibre 지도 뷰 | ✅ `/sites?view=map` — OSM 타일 + 개체목 마커, 클릭 시 상세로 이동 |
 | 중간 | CSV 내보내기 | ✅ UTF-8(BOM) CSV — [src/lib/export/csv.ts](src/lib/export/csv.ts) |
 | 중간 | 한국어 행정구역 reverse geocoding | ✅ VWorld(키 있을 때) + OSM Nominatim fallback — [src/lib/geocode/reverse.ts](src/lib/geocode/reverse.ts), `/events/new` 의 「좌표로 주소 채우기」 |
-| 낮음 | DNA 분석 결과 테이블 + 업로드 | ✅ `dna_results` 테이블 + `dna` Storage 버킷 + 야장 상세 화면 인라인 관리 UI (admin/lead). 마이그레이션 [006](supabase/migrations/006_dna_results.sql) |
+| 낮음 | DNA 분석 결과 테이블 + 업로드 | ✅ `dna_results` 테이블 + `dna` Storage 버킷. 008 이후 **시편(specimens) 상세에서 관리** — 야장은 채취 단계만(현장 정보). 마이그레이션 [006](supabase/migrations/006_dna_results.sql) · [008](supabase/migrations/008_dna_to_specimens.sql) |
 
 ## 6.1 사용자 관리 강화 기능 셋업 (선택)
 
