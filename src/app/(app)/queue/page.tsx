@@ -12,10 +12,19 @@ import {
 } from "@/lib/db/queue";
 import { syncOnce } from "@/lib/sync/worker";
 import type { QueueRow } from "@/lib/db/dexie";
+import {
+  buildQueueBackupZip,
+  defaultBackupFilename,
+  downloadBlob,
+  type QueueBackupSummary,
+} from "@/lib/db/export";
 
 export default function QueuePage() {
   const [rows, setRows] = useState<QueueRow[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [lastExport, setLastExport] = useState<{ at: string; summary: QueueBackupSummary } | null>(null);
+  const [exportErr, setExportErr] = useState<string | null>(null);
 
   async function refresh() {
     setRows(await listQueue());
@@ -40,6 +49,20 @@ export default function QueuePage() {
     runSync();
   }
 
+  async function handleExport() {
+    setExporting(true);
+    setExportErr(null);
+    try {
+      const { blob, summary } = await buildQueueBackupZip();
+      downloadBlob(blob, defaultBackupFilename());
+      setLastExport({ at: new Date().toISOString(), summary });
+    } catch (e: any) {
+      setExportErr(e?.message ?? "백업 ZIP 생성 실패");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function handleAbandon(seq: number, kind: QueueRow["kind"]) {
     const msg =
       kind === "photo"
@@ -55,12 +78,47 @@ export default function QueuePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-xl font-bold">동기화 대기열</h1>
-        <button onClick={runSync} disabled={syncing} className="btn-primary">
-          {syncing ? "동기화 중…" : "지금 동기화"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="btn-secondary text-sm"
+            title="대기열의 야장·사진을 ZIP 한 파일로 저장. 서버 장애나 단말 교체 대비 백업용."
+          >
+            {exporting ? "생성 중…" : "📦 백업 ZIP"}
+          </button>
+          <button onClick={runSync} disabled={syncing} className="btn-primary">
+            {syncing ? "동기화 중…" : "지금 동기화"}
+          </button>
+        </div>
       </div>
+
+      {lastExport && (
+        <p className="text-xs rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 p-2">
+          ✓ 백업 ZIP 생성 완료 ({new Date(lastExport.at).toLocaleTimeString("ko-KR")}) —
+          야장 {lastExport.summary.sampling_events}건 · 사진 {lastExport.summary.photos}건 · 큐 {lastExport.summary.queue_items}건.
+          파일은 다운로드 폴더에 저장됐습니다.
+        </p>
+      )}
+      {exportErr && (
+        <p className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2 break-all">
+          백업 실패: {exportErr}
+        </p>
+      )}
+      <details className="text-xs text-stone-500">
+        <summary className="cursor-pointer">📦 백업 ZIP 안내</summary>
+        <div className="mt-2 space-y-1 pl-3">
+          <p>현재 단말의 대기 중인 야장과 첨부 사진을 ZIP 한 파일로 묶어 다운로드합니다. 서버 장애·인터넷 단절·단말 교체에 대비한 보존용.</p>
+          <ul className="list-disc pl-5 space-y-0.5">
+            <li><code>queue.json</code> — 야장·사진 메타·큐 상태. JSON 들여쓰기. 텍스트 에디터·Excel·Python 등으로 그대로 읽힘.</li>
+            <li><code>photos/&lt;event_id&gt;/&lt;photo_id&gt;.jpg</code> — 원본 JPEG (1600px·85% 또는 사용자가 선택한 품질).</li>
+            <li><code>README.txt</code> — 파일 구조 설명.</li>
+          </ul>
+          <p>현재 버전은 자동 복구를 제공하지 않습니다. 데이터를 다시 올리려면 운영 책임자에게 ZIP 을 전달해주세요.</p>
+        </div>
+      </details>
 
       {conflictCount > 0 && (
         <p className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2">
