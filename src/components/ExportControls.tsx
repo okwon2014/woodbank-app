@@ -4,6 +4,7 @@ import { useState } from "react";
 import { downloadExcel } from "@/lib/export/excel";
 import { downloadDocx } from "@/lib/export/docx";
 import { downloadCsv } from "@/lib/export/csv";
+import { buildExportZipFromEvents, downloadBlob } from "@/lib/export/zip";
 import type { EventExport } from "@/lib/export/types";
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
 }
 
 export function ExportControls({ events, printHref }: Props) {
-  const [busy, setBusy] = useState<"" | "excel" | "csv" | "docx" | "pdf">("");
+  const [busy, setBusy] = useState<"" | "excel" | "csv" | "docx" | "pdf" | "zip">("");
   const [progress, setProgress] = useState<string>("");
 
   const ts = new Date().toISOString().slice(0, 10);
@@ -65,6 +66,29 @@ export function ExportControls({ events, printHref }: Props) {
     window.open(printHref, "_blank");
   }
 
+  async function onZip() {
+    if (events.length === 0) return alert("내보낼 항목이 없습니다.");
+    setBusy("zip");
+    setProgress("ZIP 생성 시작…");
+    try {
+      const blob = await buildExportZipFromEvents(events, {
+        onProgress: (p) => {
+          if (p.stage === "fetching-photos") {
+            setProgress(`사진 다운로드 ${p.done}/${p.total}`);
+          } else {
+            setProgress("ZIP 패키징…");
+          }
+        },
+      });
+      downloadBlob(blob, `woodbank_${ts}.zip`);
+    } catch (e: any) {
+      alert(e?.message ?? "ZIP 생성 실패");
+    } finally {
+      setBusy("");
+      setProgress("");
+    }
+  }
+
   const disabled = busy !== "" || events.length === 0;
 
   return (
@@ -97,6 +121,12 @@ export function ExportControls({ events, printHref }: Props) {
         </a>
       </div>
 
+      <div className="grid grid-cols-1 gap-2">
+        <button onClick={onZip} disabled={disabled} className="btn-primary text-sm">
+          {busy === "zip" ? "ZIP 생성 중…" : "📦 ZIP (사진 + JSON, 백업·복원 호환)"}
+        </button>
+      </div>
+
       {progress && (
         <div className="text-xs text-stone-600 bg-stone-50 rounded p-2">{progress}</div>
       )}
@@ -109,6 +139,7 @@ export function ExportControls({ events, printHref }: Props) {
           <li><b>Word (사진 포함)</b>: 첨부 PDF와 동일한 1샘플 1페이지 양식. 사진 크기는 110×110px로 자동 축소. N건이 많으면 시간이 걸립니다.</li>
           <li><b>Word (사진 없이)</b>: 텍스트 필드만. 즉시 완료.</li>
           <li><b>PDF</b>: 새 탭으로 인쇄 뷰가 열립니다. 브라우저 메뉴에서 「인쇄 → PDF로 저장」 선택. macOS에서 가장 깔끔. 사진은 Storage signed URL로 직접 렌더.</li>
+          <li><b>ZIP</b>: 야장(queue.json) + 사진 원본(.jpg) + README 를 한 파일로. 단말 큐 백업과 같은 형식이라 <code>/admin/import</code> 에서 그대로 복원 가능. 외부 분석·재해 복구 모두 호환.</li>
         </ul>
       </details>
     </div>
