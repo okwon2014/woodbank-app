@@ -4,6 +4,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { SPECIMEN_TYPES, type Specimen, type SpecimenTypeCode } from "@/types/db";
 import { SpecimenQrCode } from "@/components/SpecimenQrCode";
+import { DnaResultManager } from "@/components/DnaResultManager";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +146,9 @@ export default async function SpecimenDetailPage(props: { params: Promise<{ id: 
               <p className="text-xs text-stone-500">자식 시편이 없습니다. {canWrite && "야장 상세 페이지의 시편 트리에서 「+ 자식」 으로 추가할 수 있습니다."}</p>
             )}
           </section>
+
+          {/* DNA 분석 결과 — 모든 시편에서 표시. 일반적으로 X(Extract) 시편에 매단다. */}
+          <DnaResultManager specimenId={me.id} canWrite={canWrite} />
         </div>
 
         {/* 오른쪽 QR 패널 */}

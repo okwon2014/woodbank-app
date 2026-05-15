@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
-import { DnaResultManager } from "@/components/DnaResultManager";
 import { SpecimenManager } from "@/components/SpecimenManager";
 import { ClickableThumbnail } from "@/components/PhotoLightbox";
 import type { PhotoCategory } from "@/types/db";
@@ -167,8 +166,9 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
         canWrite={role === "admin" || role === "lead"}
       />
 
-      {/* DNA 분석 결과 — admin/lead 가 결과 등록·삭제 가능, 나머지는 read-only */}
-      <DnaResultManager eventId={event.id} canWrite={role === "admin" || role === "lead"} />
+      {/* DNA 분석 결과는 시편(X Extract 등) 상세 페이지에서 관리합니다.
+          야장은 채취 단계 기록이라 분석 결과가 직접 매달리지 않음 — 야장의 「DNA 시료
+          채취」 체크는 그대로 현장 정보로 의미. */}
 
       {/* 사진 — 클릭 시 라이트박스로 원본+EXIF 보기 */}
       <section>

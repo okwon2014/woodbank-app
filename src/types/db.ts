@@ -122,7 +122,10 @@ export interface Specimen {
 
 export interface DnaResult {
   id: string;
-  event_id: string;
+  // 008 마이그레이션 이후 specimen_id 가 주 식별자. event_id 는 deprecated 이지만
+  // 베타 호환을 위해 nullable 로 유지.
+  specimen_id: string | null;
+  event_id: string | null;
   analysis_type: string | null;
   identification_result: string | null;
   similarity_score: number | null;

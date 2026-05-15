@@ -10,11 +10,14 @@ interface ResultRow extends DnaResult {
 }
 
 interface Props {
-  eventId: string;
+  // 008 마이그레이션 이후 specimen 단위로 결과를 매단다.
+  // DNA 분석은 보통 X(Extract) 시편에 대해 이루어지지만, 다른 시편
+  // (디스크·블록 등)에 직접 결과를 매다는 것도 가능.
+  specimenId: string;
   canWrite: boolean;
 }
 
-export function DnaResultManager({ eventId, canWrite }: Props) {
+export function DnaResultManager({ specimenId, canWrite }: Props) {
   const router = useRouter();
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +44,7 @@ export function DnaResultManager({ eventId, canWrite }: Props) {
       const { data, error } = await sb
         .from("dna_results")
         .select("*")
-        .eq("event_id", eventId)
+        .eq("specimen_id", specimenId)
         .order("analyzed_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -67,7 +70,7 @@ export function DnaResultManager({ eventId, canWrite }: Props) {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventId]);
+  }, [specimenId]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -76,9 +79,9 @@ export function DnaResultManager({ eventId, canWrite }: Props) {
     try {
       const sb = getSupabaseBrowser();
 
-      // 1) 결과 row 삽입
+      // 1) 결과 row 삽입 — 008 이후 specimen_id 기준
       const payload: Partial<DnaResult> = {
-        event_id: eventId,
+        specimen_id: specimenId,
         analysis_type: form.analysis_type.trim() || null,
         identification_result: form.identification_result.trim() || null,
         similarity_score: form.similarity_score ? Number(form.similarity_score) : null,
@@ -93,10 +96,10 @@ export function DnaResultManager({ eventId, canWrite }: Props) {
         .single();
       if (insErr) throw insErr;
 
-      // 2) 파일 첨부(선택)
+      // 2) 파일 첨부(선택) — Storage path 도 specimen 단위로
       if (file && inserted?.id) {
         const ext = file.name.split(".").pop() || "bin";
-        const path = `${eventId}/${inserted.id}.${ext}`;
+        const path = `specimens/${specimenId}/${inserted.id}.${ext}`;
         const { error: upErr } = await sb.storage
           .from("dna")
           .upload(path, file, { upsert: false, contentType: file.type || undefined });
