@@ -33,7 +33,11 @@
    - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (운영 환경변수에만)
 5. **Authentication → URL Configuration**:
    - Site URL: `https://woodbank-app.vercel.app` (운영 도메인)
-   - Redirect URLs: `https://woodbank-app.vercel.app/auth/update-password` 등록
+   - Redirect URLs 에 다음 모두 추가:
+     - `https://woodbank-app.vercel.app/auth/callback` ✅ **매직링크·비밀번호 재설정 모두 이리로 옵니다**
+     - `https://woodbank-app.vercel.app/auth/update-password` (구버전 호환)
+     - 로컬 dev 테스트 시: `http://localhost:3000/auth/callback`
+   - Redirect URL 미등록 시 매직링크 클릭이 `error=redirect_to_not_allowed` 로 실패합니다.
 6. (선택) **Authentication → Email Templates** — 한국어로 갈아끼우려면 reset/invite/confirm 템플릿 수정.
 
 > **CLI로 적용하기**: `supabase db push` 가 동작하면 더 깔끔. 단, 첫 셋업은 위의 SQL Editor 붙여넣기 방법으로 진행해도 동일하다.
@@ -173,6 +177,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | 로그인은 되지만 모든 목록이 비어 있음 | `users_meta.role = 'guest'`. admin이 역할 부여 필요 |
 | "Bucket not found" | 003 마이그레이션 누락 — 재실행 |
 | 새 가입자에게 알림 안 옴 | `RESEND_API_KEY`/`WEBHOOK_SECRET` 확인. Database Webhook 활성 상태 |
+| 매직링크/재설정 링크 클릭 후 로그인 안 됨 | (1) Supabase Dashboard → Authentication → URL Configuration → Redirect URLs 에 `https://<도메인>/auth/callback` 등록됐는지 (2) 메일 발송 자체 — 무료 티어는 시간당 발송 한도 — Authentication → Logs 확인 (3) 링크는 한 번만 사용 가능, 1시간 후 만료 |
 | `/admin/users`에서 사용자 안 보임 | 005 RPC 미적용 또는 호출자 role≠admin |
 | 동기화 큐가 안 줄어듦 | `/queue`에서 `last_error` 확인. 최다 발생: RLS 차단(역할/지역), 네트워크 |
 | 큐 항목이 "자동 재시도 중단" 상태 | 5회 연속 실패 시 자동 재시도가 멈춤. 원인(보통 RLS 권한·필수 컬럼 누락) 해결 후 `/queue`에서 [지금 재시도]. 데이터를 포기하려면 [큐에서 제거] |

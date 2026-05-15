@@ -35,12 +35,15 @@ function LoginContent() {
         if (error) throw error;
         router.replace(redirect);
       } else {
+        // 매직링크는 PKCE flow — Supabase 가 ?code 파라미터로 보내고
+        // /auth/callback 이 code 를 세션으로 교환한 뒤 next 로 redirect.
+        const callbackUrl = `${location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`;
         const { error } = await sb.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: `${location.origin}${redirect}` },
+          options: { emailRedirectTo: callbackUrl },
         });
         if (error) throw error;
-        setMsg("메일로 로그인 링크를 보냈습니다. 메일함을 확인해주세요.");
+        setMsg("메일로 로그인 링크를 보냈습니다. 메일함(스팸함 포함)을 확인해주세요. 링크는 한 번만 사용 가능합니다.");
       }
     } catch (e: any) {
       setMsg(e?.message ?? "로그인에 실패했습니다.");
