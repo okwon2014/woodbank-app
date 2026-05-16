@@ -121,10 +121,14 @@ export default function QueuePage() {
       </details>
 
       {conflictCount > 0 && (
-        <p className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2">
-          ⛔ 서버 충돌로 자동 재시도가 중단된 항목 {conflictCount}건이 있습니다.
-          가장 흔한 원인은 채취 번호(sample_no) 중복입니다. 입력값을 고친 뒤 새 야장으로 다시 저장하거나 [큐에서 제거]를 눌러주세요.
-        </p>
+        <div className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2 space-y-1">
+          <p>⛔ 서버 충돌로 자동 재시도가 중단된 항목 {conflictCount}건이 있습니다.</p>
+          <p>흔한 원인:</p>
+          <ul className="list-disc pl-5">
+            <li><b>채취 번호 중복</b> — 같은 <code>sample_no</code> 가 이미 서버에 있음. 채취번호를 고쳐 새 야장으로 다시 저장 후 [큐에서 제거].</li>
+            <li><b>사진의 야장이 서버에 없음</b> — 야장이 삭제됐거나 다른 단말에서 다른 ID 로 등록된 경우. 사진은 야장 상세에서 다시 첨부하시고 [큐에서 제거] (필요하면 「📦 백업 ZIP」 으로 먼저 받아두기).</li>
+          </ul>
+        </div>
       )}
       {abandonedOnlyCount > 0 && (
         <p className="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 p-2">

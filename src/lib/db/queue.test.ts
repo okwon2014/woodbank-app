@@ -38,12 +38,15 @@ describe("isConflict", () => {
 });
 
 describe("isConflictError", () => {
-  it("Postgres 23505 / 23514 SQLSTATE 는 충돌", () => {
+  it("Postgres 23505 / 23514 / 23503 SQLSTATE 는 충돌", () => {
     expect(isConflictError({ code: "23505", message: "duplicate key" })).toBe(true);
     expect(isConflictError({ code: "23514", message: "check violation" })).toBe(true);
+    // 23503 = FK violation. 예: photos.event_id 가 가리키는 sampling_event 가 없음.
+    // 같은 페이로드 재시도해도 영원히 실패하므로 conflict 분류.
+    expect(isConflictError({ code: "23503", message: "fk violation" })).toBe(true);
   });
   it("그 외 코드/객체는 충돌 아님", () => {
-    expect(isConflictError({ code: "23503", message: "fk violation" })).toBe(false);
+    expect(isConflictError({ code: "23502", message: "not null violation" })).toBe(false);
     expect(isConflictError(new Error("network"))).toBe(false);
     expect(isConflictError({})).toBe(false);
     expect(isConflictError(null)).toBe(false);

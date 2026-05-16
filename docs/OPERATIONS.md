@@ -182,7 +182,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | 새 가입자에게 알림 안 옴 | `RESEND_API_KEY`/`WEBHOOK_SECRET` 확인. Database Webhook 활성 상태 |
 | 매직링크/재설정 링크 클릭 후 로그인 안 됨 | (1) Supabase Dashboard → Authentication → URL Configuration → Redirect URLs 에 `https://<도메인>/auth/callback` 등록됐는지 (2) 메일 발송 자체 — 무료 티어는 시간당 발송 한도 — Authentication → Logs 확인 (3) 링크는 한 번만 사용 가능, 1시간 후 만료 |
 | `/admin/users`에서 사용자 안 보임 | 005 RPC 미적용 또는 호출자 role≠admin |
-| 동기화 큐가 안 줄어듦 | `/queue`에서 `last_error` 확인. 최다 발생: RLS 차단(역할/지역), 네트워크 |
+| 동기화 큐가 안 줄어듦 | `/queue`에서 `last_error` 확인. 최다 발생: RLS 차단(역할/지역), 네트워크, FK 위반(23503 — 사진의 야장이 서버에 없음, 보통 야장 삭제 또는 다른 단말에서 다른 ID 로 재등록) |
 | 큐 항목이 "자동 재시도 중단" 상태 | 5회 연속 실패 시 자동 재시도가 멈춤. 원인(보통 RLS 권한·필수 컬럼 누락) 해결 후 `/queue`에서 [지금 재시도]. 데이터를 포기하려면 [큐에서 제거] |
 | "서버 충돌" 빨간 배지 | Postgres unique·check 제약 위반(예: `sample_no` 중복). 같은 페이로드로 재시도해도 또 실패. 채취번호를 고친 새 야장으로 다시 저장하거나, 충돌 항목은 [큐에서 제거] |
 | PWA 설치 안 됨 | HTTPS 필요. Vercel 도메인에서 시도. `public/icons/*.png` 존재 확인 |

@@ -143,10 +143,13 @@ export function isConflict(row: Pick<QueueRow, "last_error">): boolean {
 }
 
 // Supabase/PostgREST 에러에서 "충돌"로 분류할 코드.
-// 23505 = unique_violation (sample_no 중복 등), 23514 = check_violation (값 범위 등).
+// 같은 페이로드를 재시도해도 결과가 같을 영구 실패 — 자동 재시도를 즉시 중단.
+//   23505 = unique_violation     (예: sample_no 중복)
+//   23514 = check_violation      (예: 값 범위 위반)
+//   23503 = foreign_key_violation (예: 사진의 event_id 가 서버에 없음 — 야장이 삭제됐거나 동기화 안 됨)
 export function isConflictError(e: any): boolean {
   const code = e?.code ?? e?.details?.code;
-  return code === "23505" || code === "23514";
+  return code === "23505" || code === "23514" || code === "23503";
 }
 
 // 자동 재시도가 중단된 항목(또는 사용자가 포기한 항목)을 영구 삭제.
