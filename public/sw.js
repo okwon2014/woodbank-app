@@ -10,7 +10,10 @@
  *
  * 새 버전 배포 시 VERSION 을 올리면 이전 캐시를 모두 제거한다.
  */
-const VERSION = "v2-2026-05";
+// v3: PR #14(FK 23503 충돌 분류) · #15(큐 일괄 삭제) · #16(sync_status 정정) ·
+//      #17(야장 폐기 시 매달린 사진 함께 정리) 를 사용자 단말에 강제로 새로 받게 한다.
+//      bump 후 첫 방문에서 옛 캐시가 모두 제거되고 새 JS 가 로드된다.
+const VERSION = "v3-2026-05-16";
 const STATIC_CACHE = `wb-static-${VERSION}`;
 const NAV_CACHE = `wb-nav-${VERSION}`;
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];

@@ -153,21 +153,54 @@ export function isConflictError(e: any): boolean {
 }
 
 // 자동 재시도가 중단된 항목(또는 사용자가 포기한 항목)을 영구 삭제.
-// 사진의 경우 photos_pending의 Blob도 함께 정리한다.
-export async function abandonQueueItem(seq: number) {
+// 반환값으로 부수 효과(=함께 삭제된 사진 수)를 알려서 UI 가 사용자에게 명확히 안내할 수 있게 한다.
+//
+// kind=photo:
+//   - sync_queue 행 삭제 + photos_pending 의 Blob 정리.
+//
+// kind=sampling_event:
+//   - sync_queue 행 삭제 + 본문은 sampling_events 에 'draft' 로 보존(사용자 원본 데이터 보호).
+//   - **같은 event_id 를 가진 사진(photos_pending + sync_queue) 도 함께 정리.**
+//     이렇게 하지 않으면 서버에 존재하지 않는 event_id 를 가진 사진들이 영원히 FK 위반(23503)
+//     으로 큐에 남아 사용자가 매번 수동으로 정리해야 한다. (현장 보고된 증상)
+//   - 사용자가 야장만 폐기하고 사진은 보존해야 한다면 [큐에서 제거] 대신 [지금 재시도] 로 야장 본문을
+//     고친 뒤 정상 동기화 흐름을 타게 해야 함. 폐기는 데이터를 함께 정리하는 작업으로 일관화한다.
+export async function abandonQueueItem(seq: number): Promise<{ photosRemoved: number }> {
   const row = await db().sync_queue.get(seq);
-  if (!row) return;
+  if (!row) return { photosRemoved: 0 };
+  let photosRemoved = 0;
   await db().transaction("rw", db().sync_queue, db().photos_pending, db().sampling_events, async () => {
     await db().sync_queue.delete(seq);
     if (row.kind === "photo") {
       await db().photos_pending.delete(row.payload_id);
     }
-    // sampling_event 본문은 보존(사용자 원본 데이터). sync_status만 표시 변경.
     if (row.kind === "sampling_event") {
       const e = await db().sampling_events.get(row.payload_id);
       if (e) await db().sampling_events.put({ ...e, sync_status: "draft" });
+      // 매달린 사진 정리. 같은 event_id 의 photos_pending 을 인덱스로 조회한 뒤,
+      // 그 id 들과 일치하는 sync_queue(kind='photo') 행도 삭제한다.
+      const photos = await db().photos_pending.where("event_id").equals(row.payload_id).toArray();
+      const photoIds = photos.map((p) => p.id);
+      if (photoIds.length > 0) {
+        await db().photos_pending.bulkDelete(photoIds);
+        const idSet = new Set(photoIds);
+        const photoQueueRows = await db()
+          .sync_queue.where("kind")
+          .equals("photo")
+          .filter((r) => idSet.has(r.payload_id))
+          .primaryKeys();
+        if (photoQueueRows.length > 0) await db().sync_queue.bulkDelete(photoQueueRows);
+        photosRemoved = photoIds.length;
+      }
     }
   });
+  return { photosRemoved };
+}
+
+// 야장을 폐기하기 전에, 단말 큐에 매달린 사진이 몇 장 있는지 미리 알려주는 헬퍼.
+// /queue 의 confirm 다이얼로그에서 "사진 N장도 함께 삭제됨" 문구를 정확히 표시하는 용도.
+export async function countOrphanPhotosForEvent(eventId: string): Promise<number> {
+  return db().photos_pending.where("event_id").equals(eventId).count();
 }
 
 export async function countPending(): Promise<number> {

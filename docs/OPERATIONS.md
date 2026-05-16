@@ -192,6 +192,8 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | 야장 상세에 DNA 결과 섹션이 없어졌어요 | 008 이후 정책: 야장 = 채취 단계 기록(현장). DNA 분석 결과는 추출물 시편(X)을 만든 뒤 그 시편 상세에서 등록. 야장 상세의 「시편」 트리에서 「+ 1차 시편 → X(Extract)」 로 생성 가능 |
 | "시편(Specimens)" 섹션이 에러 / 추가 안 됨 | 007 마이그레이션 미적용. `specimens` 테이블·`create_specimen` RPC 확인. 쓰기 권한은 admin/lead. 같은 부모에서 동시 추가 시 `23505` 발생하면 클라이언트가 한 번 더 시도하면 됨 |
 | `/events` 목록에서 이미 등록된 야장이 계속 `queued`/`conflict` 배지로 보임 | 010 마이그레이션 누락 또는 옛 sync worker. 010 적용 시 서버에 남아 있던 `queued`/`draft`/`conflict` 행이 일괄 `synced` 로 정정됨. 새로 등록되는 야장은 fix 된 worker 가 `synced` 로 보내므로 정상. `sync_status` 는 단말 내부 상태(Dexie 큐)지 서버 상태가 아님을 기억할 것 |
+| `/queue` 에 사진 1건이 계속 `photos_event_id_fkey` (23503) 위반으로 남음 | 그 사진의 야장(`event_id`)이 서버에 없음 = orphan. (1) 옛 단말 코드(PR #14 이전)에서 사용자가 야장만 [큐에서 제거] 했을 때 photos_pending 잔재로 남았을 가능성. v3 sw.js 부터는 abandonQueueItem 이 매달린 사진까지 함께 정리하므로 신규 발생 차단. (2) 기존 잔재는 사진 카드 [지금 재시도] 를 5회 채워 [큐에서 제거] 노출 후 삭제, 또는 PR #14 가 단말에 적용된 뒤 자동으로 빨간 "서버 충돌" 로 분류되면 [큐에서 제거] 노출 |
+| 모바일 PWA 가 옛 버전 코드를 계속 실행 (예: 23503 이 충돌이 아닌 일반 실패로 보임, 신규 fix 미반영) | `public/sw.js` 의 `VERSION` 이 안 올라가서 옛 캐시가 남아 있을 가능성. 신규 배포 시 VERSION 을 함께 bump (예: `v3-YYYY-MM-DD`). 사용자 측 즉시 복구는 (iOS) 설치된 홈 화면 앱 삭제 후 재설치, (Android Chrome) 설정 → 사이트 설정 → 사이트 데이터 삭제 |
 
 ## 9. 의존성 보안
 
