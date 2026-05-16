@@ -152,6 +152,30 @@ export function isConflictError(e: any): boolean {
   return code === "23505" || code === "23514" || code === "23503";
 }
 
+// 술어에 맞는 큐 항목을 모두 영구 삭제. 각각 abandonQueueItem 을 호출하므로
+// 사진 Blob 정리 / sampling_events.sync_status='draft' 표시 모두 일관 처리.
+// 반환값: 실제로 제거된 항목 수.
+export async function abandonManyByPredicate(
+  predicate: (row: QueueRow) => boolean,
+): Promise<number> {
+  const rows = await db().sync_queue.toArray();
+  const targets = rows.filter(predicate);
+  for (const r of targets) {
+    if (r.seq !== undefined) await abandonQueueItem(r.seq);
+  }
+  return targets.length;
+}
+
+// 자주 쓰는 두 가지 — 충돌/중단된 항목 일괄 제거 (가장 흔한 정리 패턴).
+export async function abandonAllConflictsAndStopped(): Promise<number> {
+  return abandonManyByPredicate((r) => isAbandoned(r) || isConflict(r));
+}
+
+// 강한 정리 — 큐 전체 비우기. 호출 측에서 강한 confirm 필수.
+export async function clearAllQueue(): Promise<number> {
+  return abandonManyByPredicate(() => true);
+}
+
 // 자동 재시도가 중단된 항목(또는 사용자가 포기한 항목)을 영구 삭제.
 // 사진의 경우 photos_pending의 Blob도 함께 정리한다.
 export async function abandonQueueItem(seq: number) {

@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import {
+  abandonAllConflictsAndStopped,
   abandonQueueItem,
+  clearAllQueue,
   isAbandoned,
   isConflict,
   isWaiting,
@@ -73,6 +75,34 @@ export default function QueuePage() {
     await refresh();
   }
 
+  async function handleBulkAbandonStuck() {
+    const targets = rows.filter((r) => isAbandoned(r) || isConflict(r));
+    if (targets.length === 0) return;
+    const photoCount = targets.filter((r) => r.kind === "photo").length;
+    const eventCount = targets.length - photoCount;
+    const msg =
+      `자동 재시도가 중단됐거나 충돌 상태인 ${targets.length}건을 모두 큐에서 제거합니다.\n` +
+      `- 사진 ${photoCount}건: 단말의 사진 데이터(blob) 도 함께 사라집니다.\n` +
+      `- 야장 ${eventCount}건: 본문은 단말에 'draft' 로 남습니다.\n\n` +
+      `필요하면 미리 「📦 백업 ZIP」 으로 받아두세요. 계속할까요?`;
+    if (!confirm(msg)) return;
+    await abandonAllConflictsAndStopped();
+    await refresh();
+  }
+
+  async function handleClearAll() {
+    if (rows.length === 0) return;
+    const msg =
+      `대기열의 모든 ${rows.length}건을 영구 삭제합니다(처리 중이 아닌 것까지 포함).\n` +
+      `사진은 단말의 blob 까지 함께 사라지고, 야장 본문은 'draft' 로 남습니다.\n\n` +
+      `이 작업은 되돌릴 수 없습니다. 미리 「📦 백업 ZIP」 으로 받아두는 것을 권장합니다.\n계속할까요?`;
+    if (!confirm(msg)) return;
+    // 한 번 더 확인 — 실수 방지
+    if (!confirm(`정말로 대기열 ${rows.length}건을 모두 삭제할까요?`)) return;
+    await clearAllQueue();
+    await refresh();
+  }
+
   const conflictCount = rows.filter((r) => isConflict(r)).length;
   const abandonedOnlyCount = rows.filter((r) => isAbandoned(r) && !isConflict(r)).length;
 
@@ -89,6 +119,15 @@ export default function QueuePage() {
           >
             {exporting ? "생성 중…" : "📦 백업 ZIP"}
           </button>
+          {rows.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="text-sm px-3 py-1.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
+              title="처리 중인 것까지 포함해 대기열 전체를 영구 삭제. 강한 확인 두 번 필요."
+            >
+              🗑 대기열 모두 비우기
+            </button>
+          )}
           <button onClick={runSync} disabled={syncing} className="btn-primary">
             {syncing ? "동기화 중…" : "지금 동기화"}
           </button>
@@ -135,6 +174,16 @@ export default function QueuePage() {
           ⚠️ {MAX_RETRIES}회 연속 실패로 자동 재시도가 중단된 항목 {abandonedOnlyCount}건이 있습니다.
           원인을 확인한 뒤 [지금 재시도] 또는 [큐에서 제거]를 눌러주세요.
         </p>
+      )}
+      {(conflictCount > 0 || abandonedOnlyCount > 0) && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleBulkAbandonStuck}
+            className="text-xs px-3 py-1.5 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
+          >
+            🗑 충돌·중단 {conflictCount + abandonedOnlyCount}건 모두 제거
+          </button>
+        </div>
       )}
 
       {rows.length === 0 && (
