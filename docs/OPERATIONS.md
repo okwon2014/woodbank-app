@@ -192,6 +192,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | 야장 상세에 DNA 결과 섹션이 없어졌어요 | 008 이후 정책: 야장 = 채취 단계 기록(현장). DNA 분석 결과는 추출물 시편(X)을 만든 뒤 그 시편 상세에서 등록. 야장 상세의 「시편」 트리에서 「+ 1차 시편 → X(Extract)」 로 생성 가능 |
 | "시편(Specimens)" 섹션이 에러 / 추가 안 됨 | 007 마이그레이션 미적용. `specimens` 테이블·`create_specimen` RPC 확인. 쓰기 권한은 admin/lead. 같은 부모에서 동시 추가 시 `23505` 발생하면 클라이언트가 한 번 더 시도하면 됨 |
 | `/events` 목록에서 이미 등록된 야장이 계속 `queued`/`conflict` 배지로 보임 | 010 마이그레이션 누락 또는 옛 sync worker. 010 적용 시 서버에 남아 있던 `queued`/`draft`/`conflict` 행이 일괄 `synced` 로 정정됨. 새로 등록되는 야장은 fix 된 worker 가 `synced` 로 보내므로 정상. `sync_status` 는 단말 내부 상태(Dexie 큐)지 서버 상태가 아님을 기억할 것 |
+| `sites_code_key` (23505) 충돌로 야장이 동기화 안 됨 | EventForm 은 매번 새 site uuid 를 발급하는데, 같은 `site_code` 가 다른 단말/사용자에 의해 이미 서버에 있는 경우 발생. **글로벌 마스터 정책**상 같은 code 면 하나의 사이트로 취급해야 한다. fix(워커 lookup): site_code/tree_local_no 를 서버에서 사전 조회해 server uuid 를 차용. 다른 region 의 같은 code 라 RLS 로 lookup 결과가 비어 있으면 여전히 충돌 가능 — 운영 측에서 담당 region 매핑 보강하거나 사용자가 자기 권한 범위로 코드를 재지정 |
 
 ## 9. 의존성 보안
 
