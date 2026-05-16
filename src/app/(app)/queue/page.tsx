@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   abandonQueueItem,
+  countOrphanPhotosForEvent,
   isAbandoned,
   isConflict,
   isWaiting,
@@ -63,14 +64,27 @@ export default function QueuePage() {
     }
   }
 
-  async function handleAbandon(seq: number, kind: QueueRow["kind"]) {
-    const msg =
-      kind === "photo"
-        ? "이 사진을 큐에서 영구 삭제합니다. 단말의 사진 데이터(blob)도 함께 사라집니다. 계속할까요?"
-        : "이 야장을 동기화 큐에서 빼고 'draft'로 되돌립니다. 본문은 단말에 남습니다. 계속할까요?";
+  async function handleAbandon(seq: number, kind: QueueRow["kind"], payloadId: string) {
+    let msg: string;
+    if (kind === "photo") {
+      msg = "이 사진을 큐에서 영구 삭제합니다. 단말의 사진 데이터(blob)도 함께 사라집니다. 계속할까요?";
+    } else {
+      // 매달린 사진 수를 미리 알려준다. 사용자가 폐기 결정의 영향 범위를 정확히 알 수 있도록.
+      const photoCount = await countOrphanPhotosForEvent(payloadId);
+      msg =
+        photoCount > 0
+          ? `이 야장을 동기화 큐에서 빼고 'draft'로 되돌립니다. 본문은 단말에 'draft' 로 남지만,\n` +
+            `이 야장에 첨부된 사진 ${photoCount}장도 단말에서 함께 삭제됩니다\n` +
+            `(서버에 야장이 없어 사진만 남으면 영원히 동기화 실패하므로).\n` +
+            `사진을 살리려면 [큐에서 제거] 대신 야장 본문을 고친 뒤 [지금 재시도] 를 누르세요. 계속할까요?`
+          : `이 야장을 동기화 큐에서 빼고 'draft'로 되돌립니다. 본문은 단말에 남습니다. 계속할까요?`;
+    }
     if (!confirm(msg)) return;
-    await abandonQueueItem(seq);
+    const { photosRemoved } = await abandonQueueItem(seq);
     await refresh();
+    if (photosRemoved > 0) {
+      alert(`야장을 큐에서 제거했습니다. 매달려 있던 사진 ${photosRemoved}장도 함께 정리되었습니다.`);
+    }
   }
 
   const conflictCount = rows.filter((r) => isConflict(r)).length;
@@ -195,7 +209,7 @@ export default function QueuePage() {
                   </button>
                   {abandoned && (
                     <button
-                      onClick={() => handleAbandon(r.seq!, r.kind)}
+                      onClick={() => handleAbandon(r.seq!, r.kind, r.payload_id)}
                       className="text-xs px-2 py-1 rounded border border-rose-300 text-rose-700 hover:bg-rose-50"
                     >
                       큐에서 제거
