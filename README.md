@@ -208,6 +208,7 @@ Save. 이제 누군가 가입하면 admin이 자동으로 이메일을 받습니
 - **사진 업로드 실패: "Bucket not found"** → 003 마이그레이션 적용 누락. SQL Editor에서 재실행.
 - **RLS 차단으로 INSERT 실패** → `user_region_assignments`가 비어 있을 가능성. lead·surveyor에게 담당 지역 코드를 매핑.
 - **`/events` 목록에서 등록된 야장이 계속 `queued` 배지로 보임** → 010 마이그레이션 누락 또는 sync worker가 옛 버전. 010 적용 후 새로 등록되는 야장은 정상. 옛날에 등록된 행도 010 의 일괄 update 로 정정됨.
+- **Supabase 프로젝트가 자동 일시중지** → Free 티어는 7일간 외부 API 호출이 없으면 paused. `vercel.json` 의 cron(`/api/cron/keepalive`)이 매일 1회 PostgREST 를 건드려 방지. Vercel 환경변수 `CRON_SECRET` 등록 필수. 자세한 셋업은 [docs/OPERATIONS.md §2.5](docs/OPERATIONS.md#2-vercel-배포-셋업).
 
 ---
 
