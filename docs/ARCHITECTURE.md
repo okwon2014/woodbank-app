@@ -132,6 +132,9 @@ photos                ← 야장에 직접 매달림(채취 시 4종 사진)
 syncOnce (online + 5분 / Background Sync / visibility 이벤트 발화)
   ├─ sync_queue 순회
   ├─ kind=sampling_event:  sites/trees/sampling_events upsert
+  │     └─ sync_status 는 단말 내부 상태이므로 서버 전송 시 항상 'synced' 로 강제
+  │        (그러지 않으면 단말이 enqueue 때 찍은 'queued' 가 서버에 박혀
+  │         /events 목록에서 영원히 'queued' 배지로 보임)
   ├─ kind=photo:           Storage upload + photos insert
   ├─ 23505/23514 → markConflict (자동 재시도 중단)
   ├─ retries < 5 → 지수 백오프(30s→2h)

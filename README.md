@@ -40,6 +40,7 @@
    7. `supabase/migrations/007_specimens.sql`
    8. `supabase/migrations/008_dna_to_specimens.sql`
    9. `supabase/migrations/009_regions_full_seed.sql`
+   10. `supabase/migrations/010_normalize_sync_status.sql`
 3. **Storage** → `photos` 버킷이 생성되었는지 확인. (003 스크립트가 자동 생성)
 4. **Project Settings → API** 에서 다음 두 값을 복사:
    - `Project URL` → `.env.local` 의 `NEXT_PUBLIC_SUPABASE_URL`
@@ -206,6 +207,7 @@ Save. 이제 누군가 가입하면 admin이 자동으로 이메일을 받습니
 - **PWA 설치 안 됨** → HTTPS에서만 동작. 로컬은 `localhost` 면 가능, 외부 접근은 Vercel 배포 후 확인.
 - **사진 업로드 실패: "Bucket not found"** → 003 마이그레이션 적용 누락. SQL Editor에서 재실행.
 - **RLS 차단으로 INSERT 실패** → `user_region_assignments`가 비어 있을 가능성. lead·surveyor에게 담당 지역 코드를 매핑.
+- **`/events` 목록에서 등록된 야장이 계속 `queued` 배지로 보임** → 010 마이그레이션 누락 또는 sync worker가 옛 버전. 010 적용 후 새로 등록되는 야장은 정상. 옛날에 등록된 행도 010 의 일괄 update 로 정정됨.
 
 ---
 

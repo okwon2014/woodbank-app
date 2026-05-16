@@ -50,7 +50,11 @@ export async function syncOnce(opts: { onProgress?: (msg: string) => void } = {}
             const { error: te } = await sb.from("trees").upsert(payload.tree);
             if (te) throw te;
           }
-          const { error } = await sb.from("sampling_events").upsert(payload.event);
+          // sync_status 는 단말 내부 상태(queued/draft/conflict)라 서버로 보낼 때는
+          // 항상 'synced' 로 강제한다. 그러지 않으면 클라이언트에서 enqueue 시 찍힌
+          // 'queued' 값이 서버에 그대로 저장되어 목록에서 영원히 'queued' 로 보인다.
+          const eventForServer = { ...payload.event, sync_status: "synced" as const };
+          const { error } = await sb.from("sampling_events").upsert(eventForServer);
           if (error) throw error;
           await markSynced(row.seq!, { kind: "sampling_event", payload_id: payload.event.id });
           ok++;
