@@ -29,6 +29,7 @@
    - `supabase/migrations/007_specimens.sql` (시편 추적성 — disc/core/block/slide/tree-ring/fiber/extract/residue 다단계 계층 + create_specimen RPC)
    - `supabase/migrations/008_dna_to_specimens.sql` (DNA 분석 결과를 시편 단위로 이동 — `dna_results.specimen_id`)
    - `supabase/migrations/009_regions_full_seed.sql` (전국 시군구 마스터 시드 — 행안부 2024-05 기준 ~230건, 004 의 일부 오류도 함께 교정)
+   - `supabase/migrations/010_normalize_sync_status.sql` (sync worker 가 단말의 `queued` 마킹을 그대로 서버에 보내던 버그로 화면에 `queued` 배지가 영구 표시되던 문제를 정정 — 기존 `sampling_events` 행을 모두 `synced` 로 일괄 update)
 3. **Storage** → `photos` 버킷이 자동 생성되었는지 확인 (003에서 생성).
 4. **Project Settings → API**:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
@@ -190,6 +191,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | "DNA 분석 결과" 섹션이 빈 상태로 보임 | 006/008 마이그레이션 미적용. `dna_results` 테이블·`specimen_id` 컬럼·`dna` 버킷 생성 확인. **시편 상세**(`/specimens/<id>`)에서만 보이며 야장 상세에선 안 보입니다(의도). RLS 상 admin/lead 만 작성 가능 |
 | 야장 상세에 DNA 결과 섹션이 없어졌어요 | 008 이후 정책: 야장 = 채취 단계 기록(현장). DNA 분석 결과는 추출물 시편(X)을 만든 뒤 그 시편 상세에서 등록. 야장 상세의 「시편」 트리에서 「+ 1차 시편 → X(Extract)」 로 생성 가능 |
 | "시편(Specimens)" 섹션이 에러 / 추가 안 됨 | 007 마이그레이션 미적용. `specimens` 테이블·`create_specimen` RPC 확인. 쓰기 권한은 admin/lead. 같은 부모에서 동시 추가 시 `23505` 발생하면 클라이언트가 한 번 더 시도하면 됨 |
+| `/events` 목록에서 이미 등록된 야장이 계속 `queued`/`conflict` 배지로 보임 | 010 마이그레이션 누락 또는 옛 sync worker. 010 적용 시 서버에 남아 있던 `queued`/`draft`/`conflict` 행이 일괄 `synced` 로 정정됨. 새로 등록되는 야장은 fix 된 worker 가 `synced` 로 보내므로 정상. `sync_status` 는 단말 내부 상태(Dexie 큐)지 서버 상태가 아님을 기억할 것 |
 
 ## 9. 의존성 보안
 
