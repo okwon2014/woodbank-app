@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { GpsPicker } from "./GpsPicker";
 import { PhotoSlot, type StagedPhoto } from "./PhotoSlot";
+import { SigunguPicker } from "./SigunguPicker";
 import { SpeciesPicker } from "./SpeciesPicker";
 import { PHOTO_QUALITY_LABELS, type PhotoQuality } from "@/lib/photo/compress";
 import { distanceMeters, validateMeasurements, type FieldWarning } from "@/lib/validation/event";
@@ -454,6 +455,21 @@ export function EventForm(props: Props) {
             />
           </div>
         </div>
+        {/* 시군구 자동완성 — 검색해서 한 번에 시도·시군구·코드 세 값 채움.
+            「좌표로 주소 채우기」 가 실패했거나 사용자가 손으로 고를 때 유용. */}
+        <SigunguPicker
+          value={
+            state.region_sigungu_code
+              ? { sigungu_code: state.region_sigungu_code, sido_name: state.region_sido, sigungu_name: state.region_sigungu }
+              : null
+          }
+          onSelect={(opt) => {
+            update("region_sido", opt.sido_name);
+            update("region_sigungu", opt.sigungu_name);
+            update("region_sigungu_code", opt.sigungu_code);
+          }}
+        />
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="field-label">시도</span>
