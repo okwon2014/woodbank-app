@@ -194,6 +194,7 @@ supabase db dump --linked --schema-only > backups/schema-$(date +%Y%m%d).sql
 | `/events` 목록에서 이미 등록된 야장이 계속 `queued`/`conflict` 배지로 보임 | 010 마이그레이션 누락 또는 옛 sync worker. 010 적용 시 서버에 남아 있던 `queued`/`draft`/`conflict` 행이 일괄 `synced` 로 정정됨. 새로 등록되는 야장은 fix 된 worker 가 `synced` 로 보내므로 정상. `sync_status` 는 단말 내부 상태(Dexie 큐)지 서버 상태가 아님을 기억할 것 |
 | `/queue` 에 사진 1건이 계속 `photos_event_id_fkey` (23503) 위반으로 남음 | 그 사진의 야장(`event_id`)이 서버에 없음 = orphan. (1) 옛 단말 코드(PR #14 이전)에서 사용자가 야장만 [큐에서 제거] 했을 때 photos_pending 잔재로 남았을 가능성. v3 sw.js 부터는 abandonQueueItem 이 매달린 사진까지 함께 정리하므로 신규 발생 차단. (2) 기존 잔재는 사진 카드 [지금 재시도] 를 5회 채워 [큐에서 제거] 노출 후 삭제, 또는 PR #14 가 단말에 적용된 뒤 자동으로 빨간 "서버 충돌" 로 분류되면 [큐에서 제거] 노출 |
 | 모바일 PWA 가 옛 버전 코드를 계속 실행 (예: 23503 이 충돌이 아닌 일반 실패로 보임, 신규 fix 미반영) | `public/sw.js` 의 `VERSION` 이 안 올라가서 옛 캐시가 남아 있을 가능성. 신규 배포 시 VERSION 을 함께 bump (예: `v3-YYYY-MM-DD`). 사용자 측 즉시 복구는 (iOS) 설치된 홈 화면 앱 삭제 후 재설치, (Android Chrome) 설정 → 사이트 설정 → 사이트 데이터 삭제 |
+| `sites_code_key` (23505) 충돌로 야장이 동기화 안 됨 | EventForm 은 매번 새 site uuid 를 발급하는데, 같은 `site_code` 가 다른 단말/사용자에 의해 이미 서버에 있는 경우 발생. **글로벌 마스터 정책**상 같은 code 면 하나의 사이트로 취급해야 한다. fix(워커 lookup): site_code/tree_local_no 를 서버에서 사전 조회해 server uuid 를 차용. 다른 region 의 같은 code 라 RLS 로 lookup 결과가 비어 있으면 여전히 충돌 가능 — 운영 측에서 담당 region 매핑 보강하거나 사용자가 자기 권한 범위로 코드를 재지정 |
 
 ## 9. 의존성 보안
 

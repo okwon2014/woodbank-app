@@ -11,6 +11,7 @@ import {
   markFailed,
   markSynced,
 } from "@/lib/db/queue";
+import { remapToServerIds } from "./remap";
 import type { QueueItem } from "@/types/db";
 
 let _running = false;
@@ -41,24 +42,70 @@ export async function syncOnce(opts: { onProgress?: (msg: string) => void } = {}
       const payload = row.payload as QueueItem;
       try {
         if (payload.kind === "sampling_event") {
-          // 1) site / tree 가 같이 있으면 먼저 upsert
+          // 글로벌 마스터 정책: sites.code 는 unique, 같은 코드는 모두가 공유하는 한 사이트로 본다.
+          // EventForm 은 매번 새 site/tree uuid 를 발급하기 때문에, 다른 단말이 같은 code 의 site 를
+          // 이미 등록했다면 그 server uuid 를 차용해야 한다. 그러지 않으면 다음 단계에서
+          // sites_code_key (unique on code) 위반(23505)으로 동기화가 영원히 막힌다.
+          //
+          // 검색→매핑→upsert 순서:
+          //   (a) select id from sites where code = ?  → serverSiteId
+          //   (b) select id from trees where site_id=? and tree_local_no=?  → serverTreeId
+          //   (c) remapToServerIds 로 payload(site, tree, event) 전체에서 일관되게 id 매핑
+          //   (d) upsert 그대로 진행
+          //
+          // event.id 는 절대 바꾸지 않는다(사진의 event_id FK + markSynced 일관성).
+          let serverSiteId: string | null = null;
           if (payload.site) {
-            const { error: se } = await sb.from("sites").upsert(payload.site);
+            const { data: foundSite, error: sLookupErr } = await sb
+              .from("sites")
+              .select("id")
+              .eq("code", payload.site.code)
+              .maybeSingle();
+            if (sLookupErr) throw sLookupErr;
+            if (foundSite?.id) serverSiteId = foundSite.id as string;
+          }
+          // tree 의 lookup 은 site_id 가 server 와 일치해야 의미가 있으므로
+          // site remap 결과를 기준으로 한 번 더 계산
+          const remappedSiteId = serverSiteId ?? payload.site?.id ?? payload.tree?.site_id;
+          let serverTreeId: string | null = null;
+          if (payload.tree && remappedSiteId) {
+            const { data: foundTree, error: tLookupErr } = await sb
+              .from("trees")
+              .select("id")
+              .eq("site_id", remappedSiteId)
+              .eq("tree_local_no", payload.tree.tree_local_no)
+              .maybeSingle();
+            if (tLookupErr) throw tLookupErr;
+            if (foundTree?.id) serverTreeId = foundTree.id as string;
+          }
+          const remapped = remapToServerIds({
+            site: payload.site,
+            tree: payload.tree,
+            event: payload.event,
+            serverSiteId,
+            serverTreeId,
+          });
+          if (remapped.site) {
+            const { error: se } = await sb.from("sites").upsert(remapped.site);
             if (se) throw se;
           }
-          if (payload.tree) {
-            const { error: te } = await sb.from("trees").upsert(payload.tree);
+          if (remapped.tree) {
+            const { error: te } = await sb.from("trees").upsert(remapped.tree);
             if (te) throw te;
           }
           // sync_status 는 단말 내부 상태(queued/draft/conflict)라 서버로 보낼 때는
           // 항상 'synced' 로 강제한다. 그러지 않으면 클라이언트에서 enqueue 시 찍힌
           // 'queued' 값이 서버에 그대로 저장되어 목록에서 영원히 'queued' 로 보인다.
-          const eventForServer = { ...payload.event, sync_status: "synced" as const };
+          const eventForServer = { ...remapped.event, sync_status: "synced" as const };
           const { error } = await sb.from("sampling_events").upsert(eventForServer);
           if (error) throw error;
+          // markSynced 의 payload_id 는 항상 단말 측 event.id 그대로 (remap 으로 안 바뀜).
           await markSynced(row.seq!, { kind: "sampling_event", payload_id: payload.event.id });
           ok++;
-          log(`이벤트 ${payload.event.sample_no} 동기화 완료`);
+          const remapNote = remapped.siteRemapped || remapped.treeRemapped
+            ? ` (site=${remapped.siteRemapped ? "remap" : "new"}, tree=${remapped.treeRemapped ? "remap" : "new"})`
+            : "";
+          log(`이벤트 ${payload.event.sample_no} 동기화 완료${remapNote}`);
         } else if (payload.kind === "photo") {
           const pending = await db().photos_pending.get(payload.meta.id);
           if (!pending) {

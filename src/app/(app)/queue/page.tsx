@@ -140,6 +140,7 @@ export default function QueuePage() {
           <p>흔한 원인:</p>
           <ul className="list-disc pl-5">
             <li><b>채취 번호 중복</b> — 같은 <code>sample_no</code> 가 이미 서버에 있음. 채취번호를 고쳐 새 야장으로 다시 저장 후 [큐에서 제거].</li>
+            <li><b>지점 코드 중복</b> (<code>sites_code_key</code>) — 같은 <code>site_code</code> 의 사이트가 다른 단말/사용자가 등록한 적이 있는데, 그 사용자의 데이터가 내 RLS 범위 밖이라 자동 매핑이 안 된 경우. 운영 책임자에게 담당 지역(region) 매핑을 요청하거나, 지점 코드를 본인 권한 범위로 다시 지정해 새 야장으로 저장.</li>
             <li><b>사진의 야장이 서버에 없음</b> — 야장이 삭제됐거나 다른 단말에서 다른 ID 로 등록된 경우. 사진은 야장 상세에서 다시 첨부하시고 [큐에서 제거] (필요하면 「📦 백업 ZIP」 으로 먼저 받아두기).</li>
           </ul>
         </div>

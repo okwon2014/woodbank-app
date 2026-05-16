@@ -131,12 +131,16 @@ photos                ← 야장에 직접 매달림(채취 시 4종 사진)
 
 syncOnce (online + 5분 / Background Sync / visibility 이벤트 발화)
   ├─ sync_queue 순회
-  ├─ kind=sampling_event:  sites/trees/sampling_events upsert
-  │     └─ sync_status 는 단말 내부 상태이므로 서버 전송 시 항상 'synced' 로 강제
-  │        (그러지 않으면 단말이 enqueue 때 찍은 'queued' 가 서버에 박혀
-  │         /events 목록에서 영원히 'queued' 배지로 보임)
+  ├─ kind=sampling_event:
+  │     ├─ (a) select id from sites where code=?  ← 글로벌 마스터 lookup
+  │     ├─ (b) select id from trees where site_id=? and tree_local_no=?
+  │     ├─ (c) remapToServerIds(site,tree,event, serverSiteId, serverTreeId)
+  │     │      payload.site.id / tree.id / event.tree_id 까지 일관 매핑
+  │     │      (event.id 는 절대 안 바꿈 — photos.event_id FK + markSynced 일관성)
+  │     └─ sites→trees→sampling_events 순서 upsert
+  │           sync_status 는 항상 'synced' 로 강제(단말 내부 상태라 서버 보내면 안 됨)
   ├─ kind=photo:           Storage upload + photos insert
-  ├─ 23505/23514 → markConflict (자동 재시도 중단)
+  ├─ 23505/23514/23503 → markConflict (자동 재시도 중단)
   ├─ retries < 5 → 지수 백오프(30s→2h)
   └─ retries ≥ 5 → 사용자가 /queue 에서 [재시도]/[제거]
 ```
