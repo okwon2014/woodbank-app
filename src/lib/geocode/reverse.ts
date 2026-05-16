@@ -97,27 +97,49 @@ async function fromNominatim(lat: number, lon: number): Promise<ReverseGeocodeRe
   };
 }
 
+// 외부 API 가 반환하는 시도명 변형을 시드의 표준 명칭으로 정규화한다.
+// (강원특별자치도/전북특별자치도 등 최신 명칭으로 시드되어 있으므로 약식 입력을 끌어올림)
+// 단, regions 테이블에는 두 표기 중 하나만 있을 수 있어, 매칭은 prefix 첫 2 글자도 시도한다.
+const SIDO_ALIAS: Record<string, string[]> = {
+  강원도: ["강원특별자치도", "강원도"],
+  강원특별자치도: ["강원특별자치도", "강원도"],
+  전라북도: ["전북특별자치도", "전라북도"],
+  전북특별자치도: ["전북특별자치도", "전라북도"],
+  전북: ["전북특별자치도", "전라북도"],
+  전남: ["전라남도"],
+  경북: ["경상북도"],
+  경남: ["경상남도"],
+  충북: ["충청북도"],
+  충남: ["충청남도"],
+  제주: ["제주특별자치도"],
+  제주도: ["제주특별자치도"],
+  세종: ["세종특별자치시"],
+};
+
 async function lookupSigunguCode(sido: string, sigungu: string): Promise<string | null> {
   try {
     const sb = await getSupabaseServer();
-    // 정확 매칭 우선
-    const { data: exact } = await sb
-      .from("regions")
-      .select("sigungu_code")
-      .eq("sido_name", sido)
-      .eq("sigungu_name", sigungu)
-      .maybeSingle();
-    if (exact?.sigungu_code) return exact.sigungu_code;
 
-    // 시도가 약식("전남" vs "전라남도")이면 startsWith 매칭
-    const { data: like } = await sb
+    // sigungu_name 으로 후보를 모두 가져온다 — 다른 시도에 같은 이름이 있을 수 있어
+    // (예: 고성군 = 강원·경남 양쪽 존재) sido 로 disambiguate.
+    const { data: byName } = await sb
       .from("regions")
       .select("sigungu_code, sido_name")
-      .ilike("sido_name", `${sido.slice(0, 2)}%`)
-      .eq("sigungu_name", sigungu)
-      .limit(1)
-      .maybeSingle();
-    return like?.sigungu_code ?? null;
+      .eq("sigungu_name", sigungu);
+    const candidates = (byName as Array<{ sigungu_code: string; sido_name: string }> | null) ?? [];
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0].sigungu_code;
+
+    // 다중 후보 — sido 정규화 후 매칭
+    const aliases = SIDO_ALIAS[sido] ?? [sido];
+    for (const a of aliases) {
+      const hit = candidates.find((c) => c.sido_name === a);
+      if (hit) return hit.sigungu_code;
+    }
+    // 마지막 시도 — sido 의 앞 2 글자 prefix
+    const prefix = sido.slice(0, 2);
+    const hit = candidates.find((c) => c.sido_name.startsWith(prefix));
+    return hit?.sigungu_code ?? null;
   } catch {
     return null;
   }

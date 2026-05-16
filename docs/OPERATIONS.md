@@ -28,6 +28,7 @@
    - `supabase/migrations/006_dna_results.sql` (DNA 분석 결과 테이블 + dna Storage 버킷)
    - `supabase/migrations/007_specimens.sql` (시편 추적성 — disc/core/block/slide/tree-ring/fiber/extract/residue 다단계 계층 + create_specimen RPC)
    - `supabase/migrations/008_dna_to_specimens.sql` (DNA 분석 결과를 시편 단위로 이동 — `dna_results.specimen_id`)
+   - `supabase/migrations/009_regions_full_seed.sql` (전국 시군구 마스터 시드 — 행안부 2024-05 기준 ~230건, 004 의 일부 오류도 함께 교정)
 3. **Storage** → `photos` 버킷이 자동 생성되었는지 확인 (003에서 생성).
 4. **Project Settings → API**:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`

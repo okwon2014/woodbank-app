@@ -39,6 +39,7 @@
    6. `supabase/migrations/006_dna_results.sql`
    7. `supabase/migrations/007_specimens.sql`
    8. `supabase/migrations/008_dna_to_specimens.sql`
+   9. `supabase/migrations/009_regions_full_seed.sql`
 3. **Storage** → `photos` 버킷이 생성되었는지 확인. (003 스크립트가 자동 생성)
 4. **Project Settings → API** 에서 다음 두 값을 복사:
    - `Project URL` → `.env.local` 의 `NEXT_PUBLIC_SUPABASE_URL`
