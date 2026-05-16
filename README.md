@@ -4,6 +4,19 @@
 
 > **🧪 내부 베타 진행 중 (v0.1)** — 시험에 참여하시는 분은 [docs/BETA.md](docs/BETA.md) 를 먼저 읽어주세요. 알려진 한계 · 골든 패스 · 피드백 채널이 모두 적혀 있습니다.
 
+## 📚 문서 안내
+
+| 누구를 위한 문서 | 어디로 |
+|---|---|
+| **시험·일반 사용자** | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — 가입·로그인·야장 입력·시편·통계·내보내기·라벨 인쇄·트러블슈팅 |
+| **베타 참여자** | [docs/BETA.md](docs/BETA.md) — 알려진 한계 + 골든 패스 + 피드백 채널 |
+| **설치·배포(Supabase + Vercel)** | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — 처음 셋업부터 점검 체크리스트까지 |
+| **다른 환경으로 옮길 때** | [docs/DEPLOYMENT_ALTERNATIVES.md](docs/DEPLOYMENT_ALTERNATIVES.md) — self-hosted Supabase / Docker / Cloudflare / Nginx |
+| **일상 운영 (역할·백업·장애)** | [docs/OPERATIONS.md](docs/OPERATIONS.md) — 환경변수·마이그레이션·pgTAP·복구·장애 대응 |
+| **시스템 구조** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 컴포넌트·데이터 흐름·시나리오별 처리 |
+| **테스트** | [docs/TESTING.md](docs/TESTING.md) — Vitest·Playwright·pgTAP·CI 예시 |
+| **개발자 컨텍스트** | [CLAUDE.md](CLAUDE.md) — 스택·폴더·동기화 흐름·코드 컨벤션·흔한 함정 |
+
 ## 0. 한눈에 보기
 
 | | |
