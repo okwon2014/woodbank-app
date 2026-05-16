@@ -97,6 +97,7 @@ public/{sw.js, manifest.webmanifest, icons/}
 | `NEXT_PUBLIC_SITE_URL` | 운영 | 이메일 redirect 기준 도메인 |
 | `RESEND_FROM_EMAIL` | 선택 | 검증된 발신 도메인 |
 | `VWORLD_API_KEY` | 선택 | 좌표→주소 자동 채우기(서버 전용). 미설정 시 OSM Nominatim fallback |
+| `CRON_SECRET` | 운영 | Vercel Cron(`/api/cron/keepalive`) 검증용. Supabase Free 일시중지 방지 |
 
 ## 코드 컨벤션
 

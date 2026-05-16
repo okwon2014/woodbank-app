@@ -71,7 +71,12 @@ on conflict (id) do update set role = 'admin', active = true;
    - Table: `auth.users`, Events: `Insert`만
    - URL: `https://<운영도메인>/api/webhooks/new-user`
    - HTTP Header: `X-Webhook-Secret: <WEBHOOK_SECRET 값>`
-5. 첫 배포 후 `/admin` 페이지가 열리는지 확인.
+5. **Vercel Cron 활성화** (Supabase Free 일시중지 방지):
+   - 이 repo 의 [vercel.json](../vercel.json) 에 매일 09:00 UTC(=KST 18:00) 1회 cron 정의되어 있음. Vercel 이 자동 인식.
+   - **CRON_SECRET 환경변수 등록 필수** — `openssl rand -hex 32` 로 생성한 임의 문자열. Production·Preview 체크.
+   - 셋업 후 Vercel Dashboard → 프로젝트 → **Cron Jobs** 탭에서 다음 실행 시각과 최근 결과 확인 가능. 첫 실행은 [Run Now] 로 즉시 검증.
+   - 동작 원리: `/api/cron/keepalive` 가 Supabase PostgREST 에 가벼운 read 한 번 → 외부 API 활동 카운트가 만들어져 7일 일시중지 카운터가 reset. pg_cron 같은 DB 내부 작업은 게이트웨이를 안 거쳐 카운트 안 됨.
+6. 첫 배포 후 `/admin` 페이지가 열리는지 확인.
 
 > PWA 아이콘은 `public/icons/icon-192.png`, `public/icons/icon-512.png` 두 파일. 임시 단색 PNG라도 넣어야 모바일 홈화면 추가가 깨지지 않습니다.
 
@@ -88,6 +93,7 @@ on conflict (id) do update set role = 'admin', active = true;
 | `WEBHOOK_SECRET` | 운영 | 선택 | Supabase Webhook 검증용 32자 이상 임의 문자열 |
 | `NEXT_PUBLIC_SITE_URL` | 운영 | 선택 | 이메일 redirect 도메인 기준 |
 | `VWORLD_API_KEY` | 운영(서버) | 선택 | 좌표→주소 자동 채우기. 미설정 시 OSM Nominatim fallback |
+| `CRON_SECRET` | 운영 | 선택 | Vercel Cron 의 `/api/cron/keepalive` 호출 검증용 32자 이상 임의 문자열. 미설정 시 라우트가 500 응답 → keepalive 동작 안 함. `openssl rand -hex 32` 로 생성 |
 
 로컬은 `.env.local`(gitignore 됨). 예시는 [.env.example](../.env.example).
 
