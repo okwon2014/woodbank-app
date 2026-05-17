@@ -123,3 +123,43 @@ public/{sw.js, manifest.webmanifest, icons/}
 - 새 입력 폼 → 이상치 안내가 필요한 측정값(수고/DBH/고도/방위 등)이면 [src/lib/validation/event.ts](src/lib/validation/event.ts)의 검증을 활용하거나 같은 패턴으로 추가. 입력은 막지 말고 **안내(warn)** 만.
 - 새 마이그레이션 → 번호 순서대로, 가능하면 `if not exists` / `drop ... if exists`로 재실행 안전하게.
 - 동기화 큐 페이로드 형태 변경 시 → 기존 큐에 남아 있는 항목이 깨질 수 있음. payload에 `version` 필드 두는 것이 안전.
+
+## 변경 → 배포 워크플로우 (Claude가 자동 수행)
+
+이 저장소는 **PR 경유 배포**가 표준이다. 어떤 의미 단위의 코드 변경이 끝나면 Claude는 사용자에게 따로 묻지 않고 다음을 자동으로 수행한다:
+
+### 1) Push 전 게이트 (강제)
+```bash
+npm run typecheck && npm test
+```
+하나라도 실패하면 push 금지. 원인 수정 후 다시 게이트 통과해야 다음 단계로.
+
+### 2) Commit & Push & PR
+- 브랜치 이름: `claude/<짧은-슬러그>` (예: `claude/gps-manual-input`). 이미 그 브랜치 위라면 그대로 사용.
+- 커밋 메시지: 한국어 conventional commit 풍 (`feat(events):`, `fix(sync):`, `refactor(dna):` 등). 본문은 1–2문장 "왜". Co-Authored-By 트레일러는 그대로.
+- `git push -u origin <branch>` 후 `gh pr create` — 제목은 커밋과 동일, 본문은 `## Summary` / `## 운영자 액션` / `## Test plan`.
+- **main 직접 push 금지.** 항상 PR로.
+
+### 3) 운영자 액션 보고 (PR 본문 + 채팅 양쪽에)
+변경 종류별로 다음을 정확히 명시한다. **해당 없음이면 "없음"이라고 적기** — 빠뜨리면 운영자가 추측하게 된다.
+
+| 영역 | 보고할 내용 |
+|---|---|
+| **Supabase** | `supabase/migrations/*.sql` 새 파일 있으면 파일명·적용 순서·SQL Editor 절차. Storage 버킷 / DB Webhook / Database Function 추가 시 그 설정 순서. |
+| **Vercel** | 새 환경변수(키 이름 + 값 출처 + Production/Preview/Development 체크 가이드). 새 cron(`vercel.json` 변경) 시 그 사실. 머지하면 자동 배포된다는 점은 매번 반복 X. |
+| **PWA** | `public/sw.js`의 `VERSION` 상수를 올렸는지(정적 자산·캐시 키 바뀌었다면 필수). 기존 사용자 단말이 새 버전을 받기 위해 필요. |
+| **Dexie** | `src/lib/db/dexie.ts`의 `version(N).stores(...)`를 올렸는지(IndexedDB 스키마 변경 시 필수). 안 올리면 기존 사용자 단말에서 마이그레이션 실패. |
+| **README 갱신** | 새 마이그레이션 추가 시 README §1의 적용 순서 목록도 함께 갱신. |
+
+### 4) 작업 후 메시지 양식 (사용자에게)
+```
+✅ PR: <URL>
+🟢 운영자 액션:
+   - Supabase: ...
+   - Vercel: ...
+   - PWA/Dexie: ...
+```
+
+### 예외
+- 단순 오타·주석·로컬 실험 등 의도가 명백히 일시적이면 push하지 않는다. 사용자가 "커밋해줘"라고 명시할 때까지.
+- `worktrees/` 안의 임시 작업이라도 브랜치명이 `claude/*`면 동일 워크플로우. 다른 prefix(`feature/*`, `wip/*`)면 사용자가 명시할 때까지 push 보류.
