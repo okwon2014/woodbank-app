@@ -82,12 +82,15 @@ export function SpecimenPrintClient({ initialItems, defaultMode, defaultSize }: 
   }
 
   // quantity 만큼 펼친 인쇄 항목들. 같은 시편은 _copy 인덱스로 React key 충돌 회피.
+  // _copyIndex/_copyTotal 은 동일 시편의 N장 인쇄 시 1/3, 2/3 식 일련번호 표기에 사용.
   const renderItems = useMemo(
     () =>
       selected.flatMap((s) =>
         Array.from({ length: s.quantity }, (_, i) => ({
           ...s.item,
           _key: `${s.item.id}#${i + 1}`,
+          _copyIndex: i + 1,
+          _copyTotal: s.quantity,
         })),
       ),
     [selected],
@@ -332,20 +335,32 @@ export function SpecimenPrintClient({ initialItems, defaultMode, defaultSize }: 
         }
         .label-inner .qr { flex-shrink: 0; }
         .label-inner .text { flex: 1; min-width: 0; line-height: 1.15; }
+        /* 공통 요소 — 수종 한글명 (가장 큼) */
         .label-inner .species {
           font-weight: 700;
           font-size: 10pt;
-          margin-bottom: 0.5mm;
           /* 한 줄 truncate — 라벨이 좁아 두 줄이면 가독성 나빠짐 */
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .label-inner .code {
+        /* 공통 요소 — 채취번호 (sample_no), 보조 */
+        .label-inner .sample {
+          font-family: ui-monospace, Menlo, Consolas, monospace;
+          font-size: 7.5pt;
+          color: #444;
+          margin-top: 0.3mm;
+        }
+        /* 차별 요소 — sample_no 이후의 시편 경로 (가장 식별성 높음) */
+        .label-inner .diff {
           font-family: ui-monospace, Menlo, Consolas, monospace;
           font-weight: 700;
-          font-size: 9pt;
+          font-size: 10pt;
+          color: #235a3f; /* brand-700 */
+          margin-top: 0.8mm;
           word-break: break-all;
         }
-        .label-inner .meta { font-size: 7pt; color: #555; margin-top: 0.5mm; }
+        /* 종류 라벨 + 일련번호 */
+        .label-inner .meta { font-size: 7pt; color: #555; margin-top: 0.6mm; }
+        .label-inner .serial { color: #888; font-variant-numeric: tabular-nums; }
         .label-inner .status-bad { color: #b91c1c; }
         .preview-border { outline: 1px dashed #ccc; outline-offset: -1px; }
         @media print { .preview-border { outline: none !important; } }
@@ -364,6 +379,8 @@ export function SpecimenPrintClient({ initialItems, defaultMode, defaultSize }: 
                 qrText={qrText(it)}
                 qrSizePx={Math.min(labelH, labelW) * 3.2}
                 showSpecies={showSpecies}
+                copyIndex={it._copyIndex}
+                copyTotal={it._copyTotal}
               />
             </div>
           ))}
@@ -377,6 +394,8 @@ export function SpecimenPrintClient({ initialItems, defaultMode, defaultSize }: 
                 qrText={qrText(it)}
                 qrSizePx={Math.min(labelH, labelW) * 3.2}
                 showSpecies={showSpecies}
+                copyIndex={it._copyIndex}
+                copyTotal={it._copyTotal}
               />
             </div>
           ))}
@@ -386,33 +405,57 @@ export function SpecimenPrintClient({ initialItems, defaultMode, defaultSize }: 
   );
 }
 
+// 라벨 컨텐츠는 세 부분으로 구성된다 (운영자 요구):
+//   1) 공통 요소  — 같은 나무에서 나온 시편들이 공유: 수종 한글명 + sample_no
+//   2) 차별 요소  — 그 시편을 형제와 구분: human_code 의 sample_no 이후 꼬리
+//                   (예: "D01.B03.L02") + 시편 종류 라벨
+//   3) 일련 번호  — 같은 시편을 N장 인쇄할 때 1/N, 2/N … 형식으로 물리 라벨 구분
 function LabelInner({
   item,
   qrText,
   qrSizePx,
   showSpecies,
+  copyIndex,
+  copyTotal,
 }: {
   item: LabelItem;
   qrText: string;
   qrSizePx: number;
   showSpecies: boolean;
+  copyIndex: number;
+  copyTotal: number;
 }) {
   const inactive = item.status !== "active";
+  // human_code 가 항상 sample_no 로 시작 → 그 prefix 를 제거한 꼬리가 「차별 요소」.
+  // 시작 점(.) 도 잘라내고 빈 문자열이면 root-level 야장(시편 자체가 야장 단위) 표시.
+  const sampleNo = item.sample_no ?? null;
+  const diff =
+    sampleNo && item.human_code.startsWith(sampleNo)
+      ? item.human_code.slice(sampleNo.length).replace(/^\./, "")
+      : item.human_code;
   return (
     <div className="label-inner">
       <div className="qr">
         <SpecimenQrCode text={qrText} sizePx={Math.max(48, Math.floor(qrSizePx))} ecc="M" />
       </div>
       <div className="text">
+        {/* ─ 공통 ─ */}
         {showSpecies && item.species_ko && (
           <div className="species" title={item.species_sci ?? undefined}>
             {item.species_ko}
           </div>
         )}
-        <div className="code">{item.human_code}</div>
+        {sampleNo && <div className="sample">{sampleNo}</div>}
+        {/* ─ 차별 ─ */}
+        {diff && <div className="diff">{diff}</div>}
         <div className={`meta ${inactive ? "status-bad" : ""}`}>
           {item.type_label}
           {inactive && <> · {item.status}</>}
+          {copyTotal > 1 && (
+            <span className="serial">
+              {" "}· {copyIndex}/{copyTotal}
+            </span>
+          )}
         </div>
       </div>
     </div>
