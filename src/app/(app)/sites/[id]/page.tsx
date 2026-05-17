@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { fmtDateKst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function SiteDetail(props: { params: Promise<{ id: string }
                 </div>
               </div>
               <div className="text-xs text-stone-400">
-                {new Date(t.updated_at).toLocaleDateString("ko-KR")}
+                {fmtDateKst(t.updated_at)}
               </div>
             </Link>
           </li>

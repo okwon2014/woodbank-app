@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { fmtDateKst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function TreeDetail(props: { params: Promise<{ id: string }
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-semibold">{e.sample_no}</div>
-                <div className="text-xs text-stone-500">{new Date(e.sampled_at).toLocaleDateString("ko-KR")}</div>
+                <div className="text-xs text-stone-500">{fmtDateKst(e.sampled_at)}</div>
               </div>
               <div className="text-right text-xs text-stone-600">
                 <div>수고 <b>{e.height_m}</b> m · DBH <b>{e.dbh_cm}</b> cm</div>

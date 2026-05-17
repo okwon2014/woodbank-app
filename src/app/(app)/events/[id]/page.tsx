@@ -7,6 +7,7 @@ import { SpecimenManager } from "@/components/SpecimenManager";
 import { ClickableThumbnail } from "@/components/PhotoLightbox";
 import { AuditTrail } from "@/components/AuditTrail";
 import { listEventAudit, getActorName } from "@/lib/audit/list";
+import { fmtDateKst, fmtDateTimeKst } from "@/lib/utils";
 import type { PhotoCategory } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -121,10 +122,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
             {/* 채취 컨텍스트 */}
             <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <Mini label="채취 번호" value={event.sample_no} mono />
-              <Mini
-                label="채취일"
-                value={new Date(event.sampled_at).toLocaleDateString("ko-KR")}
-              />
+              <Mini label="채취일" value={fmtDateKst(event.sampled_at)} />
               <Mini label="수고" value={event.height_m != null ? `${event.height_m} m` : "-"} />
               <Mini label="DBH" value={event.dbh_cm != null ? `${event.dbh_cm} cm` : "-"} />
             </div>
@@ -178,14 +176,12 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
             <div className="mt-3 text-[11px] text-stone-500 border-t border-brand-200/50 pt-2">
               <span className="font-semibold text-stone-600">등록</span>{" "}
               {creatorName ?? <span className="italic">알 수 없음</span>}
-              {event.created_at && (
-                <> · {new Date(event.created_at).toLocaleString("ko-KR")}</>
-              )}
+              {event.created_at && <> · {fmtDateTimeKst(event.created_at)}</>}
               {event.updated_at && event.updated_at !== event.created_at && (
                 <>
                   <span className="mx-2 text-stone-400">|</span>
                   <span className="font-semibold text-stone-600">최종 수정</span>{" "}
-                  {new Date(event.updated_at).toLocaleString("ko-KR")}
+                  {fmtDateTimeKst(event.updated_at)}
                 </>
               )}
             </div>
@@ -212,14 +208,11 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
         <SectionHeader title="채취 기본 정보" editHref={`/events/${event.id}/edit`} editLabel="✎ 야장 수정" />
         <Grid>
           <KV label="채취 번호" value={event.sample_no} mono />
-          <KV label="채취일" value={new Date(event.sampled_at).toLocaleDateString("ko-KR")} />
+          <KV label="채취일" value={fmtDateKst(event.sampled_at)} />
           <KV label="수고" value={event.height_m != null ? `${event.height_m} m` : "-"} />
           <KV label="DBH" value={event.dbh_cm != null ? `${event.dbh_cm} cm` : "-"} />
           <KV label="DNA 채취" value={event.dna_collected ? `✓ ${event.dna_sample_code ?? ""}` : "—"} />
-          <KV
-            label="기기 입력 시각"
-            value={event.device_recorded_at ? new Date(event.device_recorded_at).toLocaleString("ko-KR") : "-"}
-          />
+          <KV label="기기 입력 시각" value={fmtDateTimeKst(event.device_recorded_at)} />
         </Grid>
         {event.notes && (
           <div className="mt-3">

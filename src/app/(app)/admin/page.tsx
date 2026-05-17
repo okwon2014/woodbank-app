@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/guard";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { fmtDateTimeKst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function AdminPage() {
                   <td className="p-2 uppercase">{u.role}</td>
                   <td className="p-2">{u.organization ?? "-"}</td>
                   <td className="p-2">{u.active ? "✓" : "✗"}</td>
-                  <td className="p-2 text-xs text-stone-500">{new Date(u.updated_at).toLocaleString("ko-KR")}</td>
+                  <td className="p-2 text-xs text-stone-500">{fmtDateTimeKst(u.updated_at)}</td>
                 </tr>
               ))}
             </tbody>

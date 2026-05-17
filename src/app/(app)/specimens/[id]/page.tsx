@@ -5,6 +5,7 @@ import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { SPECIMEN_TYPES, type Specimen, type SpecimenTypeCode } from "@/types/db";
 import { SpecimenQrCode } from "@/components/SpecimenQrCode";
 import { DnaResultManager } from "@/components/DnaResultManager";
+import { fmtDateTimeKst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -93,8 +94,8 @@ export default async function SpecimenDetailPage(props: { params: Promise<{ id: 
               <Kv label="형제 번호" value={`${me.type_code}${String(me.seq_no).padStart(2, "0")}`} />
               <Kv label="보관 위치" value={me.storage_location ?? "-"} />
               <Kv label="상태" value={me.status} />
-              <Kv label="생성" value={new Date(me.created_at).toLocaleString("ko-KR")} />
-              <Kv label="갱신" value={new Date(me.updated_at).toLocaleString("ko-KR")} />
+              <Kv label="생성" value={fmtDateTimeKst(me.created_at)} />
+              <Kv label="갱신" value={fmtDateTimeKst(me.updated_at)} />
             </dl>
             {me.description && (
               <div className="mt-3">
