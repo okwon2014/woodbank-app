@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { countBy, histogram, monthlyTimeline, numStats } from "@/lib/stats/aggregate";
+import { SPECIMEN_TYPES, type SpecimenTypeCode } from "@/types/db";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function StatsPage() {
     { data: trees },
     { data: sites },
     { data: species },
+    { data: specimens },
   ] = await Promise.all([
     sb.from("sites").select("*", { count: "exact", head: true }),
     sb.from("trees").select("*", { count: "exact", head: true }),
@@ -36,7 +38,9 @@ export default async function StatsPage() {
       .limit(5000),
     sb.from("trees").select("id, site_id, species_code").limit(5000),
     sb.from("sites").select("id, region_sigungu, region_sigungu_code, region_sido").limit(5000),
-    sb.from("species").select("code, ko_name"),
+    sb.from("species").select("code, ko_name, sci_name"),
+    // 시편 — root_event_id 별로 어떤 type_code 가 달려 있는지만 필요.
+    sb.from("specimens").select("root_event_id, type_code").limit(20000),
   ]);
 
   const eventsRows = (events ?? []) as Array<{
@@ -55,7 +59,7 @@ export default async function StatsPage() {
     ((sites as Array<{ id: string; region_sigungu: string | null; region_sigungu_code: string | null; region_sido: string | null }> | null) ?? []).map((s) => [s.id, s]),
   );
   const speciesByCode = new Map(
-    ((species as Array<{ code: string; ko_name: string }> | null) ?? []).map((sp) => [sp.code, sp]),
+    ((species as Array<{ code: string; ko_name: string; sci_name: string | null }> | null) ?? []).map((sp) => [sp.code, sp]),
   );
 
   // 이벤트 단위로 region·species 를 join. tree/site 가 RLS 로 가려졌을 수도 있어 fallback 처리.
@@ -66,16 +70,78 @@ export default async function StatsPage() {
     return {
       ...e,
       region_sigungu: site?.region_sigungu ?? null,
+      region_sigungu_code: site?.region_sigungu_code ?? null,
       region_sido: site?.region_sido ?? null,
       species_code: tree?.species_code ?? null,
       species_ko: sp?.ko_name ?? null,
+      species_sci: sp?.sci_name ?? null,
     };
   });
 
-  // 통계 계산
-  const bySigungu = countBy(joined, (e) => e.region_sigungu);
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 집계 — 표시 라벨과 필터 코드가 다른 경우(수종·시군구) 둘 다 들고 다닌다.
+  // BarList 에 hrefBuilder 로 필터 URL 을 만들어 넘긴다.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // 시군구별 — key=code (filter용), label=name (표시용)
+  const sigunguBucket = new Map<string, { label: string; count: number }>();
+  joined.forEach((e) => {
+    if (!e.region_sigungu_code) return;
+    const cur = sigunguBucket.get(e.region_sigungu_code) ?? {
+      label: e.region_sigungu ?? e.region_sigungu_code,
+      count: 0,
+    };
+    cur.count++;
+    sigunguBucket.set(e.region_sigungu_code, cur);
+  });
+  const bySigungu = Array.from(sigunguBucket.entries())
+    .map(([code, v]) => ({ key: code, label: v.label, count: v.count }))
+    .sort((a, b) => b.count - a.count);
+
+  // 수종별 — key=species_code (filter용), label="한글명 (학명)"
+  const speciesBucket = new Map<string, { label: string; count: number }>();
+  joined.forEach((e) => {
+    if (!e.species_code) return;
+    const label = e.species_ko
+      ? e.species_sci
+        ? `${e.species_ko} (${e.species_sci})`
+        : e.species_ko
+      : e.species_code;
+    const cur = speciesBucket.get(e.species_code) ?? { label, count: 0 };
+    cur.count++;
+    speciesBucket.set(e.species_code, cur);
+  });
+  const bySpecies = Array.from(speciesBucket.entries())
+    .map(([code, v]) => ({ key: code, label: v.label, count: v.count }))
+    .sort((a, b) => b.count - a.count);
+
+  // 시도별 — 필터 파라미터 없음 → 링크화 생략
   const bySido = countBy(joined, (e) => e.region_sido);
-  const bySpecies = countBy(joined, (e) => e.species_ko ?? e.species_code);
+
+  // 시편 종류별 — type_code 별로 distinct event 수.
+  // 011 적용 전이라도 DNA 필터와 동일한 bridge 적용: type_code='N' 의 count 는
+  // specimens 의 N 시편이 달린 event 와 dna_collected=true event 의 합집합.
+  const eventsByType = new Map<SpecimenTypeCode, Set<string>>();
+  ((specimens as Array<{ root_event_id: string; type_code: SpecimenTypeCode }> | null) ?? []).forEach(
+    (s) => {
+      if (!s.root_event_id || !s.type_code) return;
+      if (!eventsByType.has(s.type_code)) eventsByType.set(s.type_code, new Set());
+      eventsByType.get(s.type_code)!.add(s.root_event_id);
+    },
+  );
+  // DNA legacy bridge
+  const nSet = eventsByType.get("N") ?? new Set<string>();
+  joined.filter((e) => e.dna_collected).forEach((e) => nSet.add(e.id));
+  if (nSet.size > 0) eventsByType.set("N", nSet);
+
+  const bySpecimenType = SPECIMEN_TYPES.map((t) => ({
+    key: t.code,
+    label: `${t.code} · ${t.ko}`,
+    count: eventsByType.get(t.code)?.size ?? 0,
+  }))
+    .filter((b) => b.count > 0)
+    .sort((a, b) => b.count - a.count);
+
   const heightStats = numStats(joined.map((e) => e.height_m));
   const dbhStats = numStats(joined.map((e) => e.dbh_cm));
   const heightHist = histogram(
@@ -94,12 +160,15 @@ export default async function StatsPage() {
   const dnaRate = joined.length > 0 ? Math.round((dnaCollected / joined.length) * 100) : 0;
   const syncBuckets = countBy(joined, (e) => e.sync_status);
 
-  // 수종별 평균 수고/DBH
-  const speciesAverages = bySpecies.slice(0, 15).map((b) => {
-    const subset = joined.filter((e) => (e.species_ko ?? e.species_code) === b.key);
+  // 수종별 평균 수고/DBH — 상위 15종, code 별 그룹
+  const topSpeciesCodes = bySpecies.slice(0, 15).map((b) => b.key);
+  const speciesAverages = topSpeciesCodes.map((code) => {
+    const subset = joined.filter((e) => e.species_code === code);
+    const bucket = speciesBucket.get(code)!;
     return {
-      key: b.key,
-      count: b.count,
+      code,
+      label: bucket.label,
+      count: bucket.count,
       avgHeight: numStats(subset.map((e) => e.height_m)).mean,
       avgDbh: numStats(subset.map((e) => e.dbh_cm)).mean,
     };
@@ -114,6 +183,7 @@ export default async function StatsPage() {
         <h1 className="text-xl font-bold">통계 대시보드</h1>
         <p className="text-xs text-stone-500 mt-1">
           본인 권한 범위 안의 데이터로 계산됩니다 ({roleLabel(role)}). 페이지 진입 시점 기준 스냅샷.
+          항목명을 누르면 「야장 목록」에서 그 조건으로 필터링된 결과를 볼 수 있습니다.
         </p>
       </div>
 
@@ -160,13 +230,45 @@ export default async function StatsPage() {
             </Card>
           </section>
 
-          {/* 지역 + 수종 */}
+          {/* 지역 + 수종 + 시편 종류 */}
           <section className="grid md:grid-cols-2 gap-4">
             <Card title={`시군구별 야장 (${bySigungu.length}개 지역)`}>
-              <BarList items={bySigungu} total={joined.length} emptyLabel="(시군구 미입력)" />
+              <BarList
+                items={bySigungu}
+                total={joined.length}
+                emptyLabel="(시군구 미입력)"
+                hrefBuilder={(code) => `/events?sigungu=${encodeURIComponent(code)}`}
+              />
             </Card>
             <Card title={`수종별 야장 (${bySpecies.length}개 종)`}>
-              <BarList items={bySpecies} total={joined.length} emptyLabel="(수종 미입력)" />
+              <BarList
+                items={bySpecies}
+                total={joined.length}
+                emptyLabel="(수종 미입력)"
+                hrefBuilder={(code) => `/events?species=${encodeURIComponent(code)}`}
+              />
+            </Card>
+          </section>
+
+          {/* 시편 종류별 야장 — 신설 */}
+          <section>
+            <Card title={`시편 종류별 야장 (${bySpecimenType.length}종)`}>
+              {bySpecimenType.length === 0 ? (
+                <p className="text-xs text-stone-500">
+                  등록된 시편이 없습니다. 야장 상세 → 「+ 1차 시편 추가」 로 등록하세요.
+                </p>
+              ) : (
+                <BarList
+                  items={bySpecimenType}
+                  total={joined.length}
+                  hrefBuilder={(code) => `/events?specimen_type=${encodeURIComponent(code)}`}
+                />
+              )}
+              <p className="text-[11px] text-stone-500 mt-3">
+                ※ 「야장 수」 기준 (같은 야장에 여러 X 시편이 있어도 1로 카운트). N(DNA) 는
+                <code className="mx-1 font-mono">specimens</code> + 야장의
+                <code className="mx-1 font-mono">dna_collected</code> 둘 다 포함.
+              </p>
             </Card>
           </section>
 
@@ -186,8 +288,15 @@ export default async function StatsPage() {
                     </thead>
                     <tbody>
                       {speciesAverages.map((s) => (
-                        <tr key={s.key} className="border-b border-stone-100">
-                          <td className="py-1.5">{s.key}</td>
+                        <tr key={s.code} className="border-b border-stone-100">
+                          <td className="py-1.5">
+                            <Link
+                              href={`/events?species=${encodeURIComponent(s.code)}`}
+                              className="text-brand-700 hover:underline"
+                            >
+                              {s.label}
+                            </Link>
+                          </td>
                           <td className="text-right tabular-nums">{s.count}</td>
                           <td className="text-right tabular-nums">{s.avgHeight != null ? `${s.avgHeight.toFixed(1)} m` : "-"}</td>
                           <td className="text-right tabular-nums">{s.avgDbh != null ? `${s.avgDbh.toFixed(1)} cm` : "-"}</td>
@@ -231,7 +340,12 @@ export default async function StatsPage() {
               <div className="flex items-baseline gap-3">
                 <div className="text-3xl font-bold text-brand-700">{dnaRate}%</div>
                 <div className="text-sm text-stone-600">
-                  {dnaCollected} / {joined.length} 건
+                  <Link
+                    href={`/events?specimen_type=N`}
+                    className="hover:underline"
+                  >
+                    {dnaCollected} / {joined.length} 건
+                  </Link>
                 </div>
               </div>
               <div className="mt-2 h-2 rounded-full bg-stone-100 overflow-hidden">
@@ -257,6 +371,7 @@ export default async function StatsPage() {
           {bySido.length > 1 && (
             <section>
               <Card title={`시도별 야장 (${bySido.length}개 시도)`}>
+                {/* 시도는 /events 필터 파라미터가 없어 링크화 생략 */}
                 <BarList items={bySido} total={joined.length} />
               </Card>
             </section>
@@ -361,14 +476,21 @@ function BarChart({
   );
 }
 
+/**
+ * 막대 리스트.
+ * - items: { key, count, label? } — label 이 없으면 String(key) 사용
+ * - hrefBuilder: 있으면 라벨을 <Link> 로 감싸 「야장 목록」 필터 페이지로 이동
+ */
 function BarList<K extends string | number>({
   items,
   total,
   emptyLabel,
+  hrefBuilder,
 }: {
-  items: Array<{ key: K; count: number }>;
+  items: Array<{ key: K; count: number; label?: string }>;
   total: number;
   emptyLabel?: string;
+  hrefBuilder?: (key: K) => string | null;
 }) {
   if (items.length === 0) {
     return <p className="text-xs text-stone-500">데이터 없음</p>;
@@ -379,10 +501,18 @@ function BarList<K extends string | number>({
       {items.slice(0, 20).map((i) => {
         const widthPct = (i.count / max) * 100;
         const pct = total > 0 ? Math.round((i.count / total) * 1000) / 10 : 0;
+        const display = i.label ?? String(i.key) ?? "";
+        const href = hrefBuilder ? hrefBuilder(i.key) : null;
         return (
           <li key={String(i.key) || "_empty"} className="text-sm">
             <div className="flex justify-between gap-2 mb-0.5">
-              <span className="truncate">{String(i.key) || emptyLabel || "(빈 값)"}</span>
+              {href ? (
+                <Link href={href} className="truncate text-brand-700 hover:underline">
+                  {display || emptyLabel || "(빈 값)"}
+                </Link>
+              ) : (
+                <span className="truncate">{display || emptyLabel || "(빈 값)"}</span>
+              )}
               <span className="tabular-nums text-stone-600 text-xs whitespace-nowrap">
                 {i.count}건 · {pct}%
               </span>
