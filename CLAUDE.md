@@ -136,9 +136,31 @@ npm run typecheck && npm test
 
 ### 2) Commit & Push & PR
 - 브랜치 이름: `claude/<짧은-슬러그>` (예: `claude/gps-manual-input`). 이미 그 브랜치 위라면 그대로 사용.
+- 새 브랜치 만들 땐 **반드시 `origin/main` 에 앵커**해서 stale base 충돌을 방지:
+  ```bash
+  git fetch origin main
+  git checkout -b claude/<slug> origin/main
+  ```
+  로컬 main 이 뒤처져 있어도 안전.
 - 커밋 메시지: 한국어 conventional commit 풍 (`feat(events):`, `fix(sync):`, `refactor(dna):` 등). 본문은 1–2문장 "왜". Co-Authored-By 트레일러는 그대로.
 - `git push -u origin <branch>` 후 `gh pr create` — 제목은 커밋과 동일, 본문은 `## Summary` / `## 운영자 액션` / `## Test plan`.
 - **main 직접 push 금지.** 항상 PR로.
+
+### 2.5) 머지 후 메인 worktree 동기화 (필수)
+PR 이 머지되면 항상 메인 worktree 도 같이 갱신한다. 안 그러면 Finder/IDE 가
+열고 있는 `~/Dropbox/.../woodbank-app/` 폴더엔 새 파일(마이그레이션 SQL,
+신규 컴포넌트 등)이 안 보여 운영자가 "파일이 없다"고 혼란스러워 한다.
+
+```bash
+gh pr merge <num> --squash
+gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>   # 원격 브랜치 정리
+cd /Users/zoom/Dropbox/woodbank_team_space/woodbank-app         # 메인 worktree
+git checkout -- package-lock.json 2>/dev/null || true           # 잡음 diff 만 있을 때
+git pull origin main --ff-only
+```
+
+머지된 SQL 마이그레이션이 있으면 위 pull 결과에 그 파일명이 나타나는지
+운영자 액션 보고에 한 번 더 환기.
 
 ### 3) 운영자 액션 보고 (PR 본문 + 채팅 양쪽에)
 변경 종류별로 다음을 정확히 명시한다. **해당 없음이면 "없음"이라고 적기** — 빠뜨리면 운영자가 추측하게 된다.
