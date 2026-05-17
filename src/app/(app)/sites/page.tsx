@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { SitesMapView, type MapTreeMarker } from "@/components/SitesMapView";
+import { fmtDateKst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ async function ListView({ sb }: { sb: Awaited<ReturnType<typeof getSupabaseServe
                 </div>
               </div>
               <div className="text-xs text-stone-400">
-                {new Date(s.updated_at).toLocaleDateString("ko-KR")}
+                {fmtDateKst(s.updated_at)}
               </div>
             </Link>
           </li>

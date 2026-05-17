@@ -39,6 +39,61 @@ export function nowIsoDate() {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 한국 표준시(KST, Asia/Seoul) 포맷 헬퍼.
+//
+// 왜 필요한가: Vercel serverless 는 UTC 로 실행되므로 서버 컴포넌트에서
+// `new Date(x).toLocaleString("ko-KR")` 를 그냥 호출하면 UTC 시각이 출력되어
+// 한국 사용자가 보면 9시간이 빠진다. 모든 시각 표시는 이 헬퍼를 통해 KST 로
+// 고정해 서버/클라이언트 어느 쪽에서 렌더되어도 동일한 결과를 보장한다.
+//
+// 입력은 ISO 문자열 또는 Date, null/undefined/잘못된 값은 "-" 반환.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const KST_TZ = "Asia/Seoul" as const;
+
+function _toDate(d: Date | string | null | undefined): Date | null {
+  if (!d) return null;
+  const date = typeof d === "string" ? new Date(d) : d;
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** 「2025. 5. 17.」 형식의 한국 날짜 (KST). */
+export function fmtDateKst(d: Date | string | null | undefined): string {
+  const date = _toDate(d);
+  if (!date) return "-";
+  return date.toLocaleDateString("ko-KR", { timeZone: KST_TZ });
+}
+
+/** 「2025. 5. 17. 오후 7:30」 형식의 한국 일시 (KST). 분까지 표시. */
+export function fmtDateTimeKst(d: Date | string | null | undefined): string {
+  const date = _toDate(d);
+  if (!date) return "-";
+  return date.toLocaleString("ko-KR", {
+    timeZone: KST_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** 「25. 5. 17. 19:30」 같이 컴팩트한 한국 일시 (KST). 감사 로그·표 셀 등 좁은 영역용. */
+export function fmtDateTimeKstShort(d: Date | string | null | undefined): string {
+  const date = _toDate(d);
+  if (!date) return "-";
+  return date.toLocaleString("ko-KR", {
+    timeZone: KST_TZ,
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 // 간단 UUIDv7 — 시간 정렬 가능. crypto.getRandomValues 사용.
 export function uuidv7(): string {
   const bytes = new Uint8Array(16);

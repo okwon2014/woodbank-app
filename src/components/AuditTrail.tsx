@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AuditEntry } from "@/lib/audit/list";
+import { fmtDateTimeKstShort } from "@/lib/utils";
 
 interface Props {
   entries: AuditEntry[];
@@ -84,14 +85,8 @@ function fmtValue(v: unknown): string {
 }
 
 function fmtTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString("ko-KR", {
-    year: "2-digit",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // 한국 표준시(KST)로 표시. 해외 IP 에서 접속하는 연구원도 동일한 시각을 보도록.
+  return fmtDateTimeKstShort(iso);
 }
 
 export function AuditTrail({ entries }: Props) {

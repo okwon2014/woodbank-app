@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { compressImage, readImageDimensions, sha256OfBlob, type PhotoQuality } from "@/lib/photo/compress";
 import { readExif } from "@/lib/photo/exif";
 import type { PhotoCategory } from "@/types/db";
-import { uuidv7 } from "@/lib/utils";
+import { uuidv7, fmtDateTimeKst } from "@/lib/utils";
 
 export interface StagedPhoto {
   id: string;
@@ -109,7 +109,7 @@ export function PhotoSlot({ category, label, value, onChange, quality = "normal"
       {value && (
         <p className="mt-2 text-[11px] text-stone-500">
           {Math.round(value.bytes / 1024)} KB · {value.width}×{value.height}
-          {value.exif_taken_at && <> · {new Date(value.exif_taken_at).toLocaleString("ko-KR")}</>}
+          {value.exif_taken_at && <> · {fmtDateTimeKst(value.exif_taken_at)}</>}
         </p>
       )}
       {err && <p className="mt-2 text-xs text-rose-600">{err}</p>}

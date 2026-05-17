@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { db } from "@/lib/db/dexie";
 import { syncOnce } from "@/lib/sync/worker";
 import type { SamplingEvent } from "@/types/db";
+import { fmtDateKst } from "@/lib/utils";
 
 export function PendingEvents() {
   const [pending, setPending] = useState<SamplingEvent[]>([]);
@@ -57,7 +58,7 @@ export function PendingEvents() {
             <div>
               <div className="font-semibold">{e.sample_no}</div>
               <div className="text-xs text-stone-500">
-                {new Date(e.sampled_at).toLocaleDateString("ko-KR")} · {e.sync_status}
+                {fmtDateKst(e.sampled_at)} · {e.sync_status}
               </div>
             </div>
             <Link href={`/queue`} className="text-xs text-amber-800 underline">

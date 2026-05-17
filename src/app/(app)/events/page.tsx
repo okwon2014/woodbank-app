@@ -4,6 +4,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { EventFilters } from "@/components/EventFilters";
 import { PendingEvents } from "@/components/PendingEvents";
 import { SPECIMEN_TYPES, type PhotoCategory, type SpecimenTypeCode } from "@/types/db";
+import { fmtDateKst } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -274,7 +275,7 @@ export default async function EventsListPage(props: { searchParams: Promise<Sear
                   </div>
 
                   <div className="text-right text-xs text-stone-600 shrink-0">
-                    <div>{new Date(e.sampled_at).toLocaleDateString("ko-KR")}</div>
+                    <div>{fmtDateKst(e.sampled_at)}</div>
                     <div className="mt-0.5">
                       수고 <b>{e.height_m ?? "-"}</b>m · DBH <b>{e.dbh_cm ?? "-"}</b>cm
                     </div>

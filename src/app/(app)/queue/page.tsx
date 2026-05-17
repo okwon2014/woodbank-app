@@ -19,6 +19,7 @@ import {
   downloadBlob,
   type QueueBackupSummary,
 } from "@/lib/db/export";
+import { fmtDateTimeKst } from "@/lib/utils";
 
 export default function QueuePage() {
   const [rows, setRows] = useState<QueueRow[]>([]);
@@ -185,7 +186,7 @@ export default function QueuePage() {
                   <div className="text-xs text-stone-500 font-mono truncate">{r.payload_id}</div>
                 </div>
                 <div className="text-right text-xs text-stone-500 shrink-0">
-                  <div>대기: {new Date(r.queued_at).toLocaleString("ko-KR")}</div>
+                  <div>대기: {fmtDateTimeKst(r.queued_at)}</div>
                   {r.retries > 0 && (
                     <div>
                       재시도 {r.retries}/{MAX_RETRIES}회

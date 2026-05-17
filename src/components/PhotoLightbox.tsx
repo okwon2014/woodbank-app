@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fmtDateTimeKst } from "@/lib/utils";
 
 export interface LightboxPhoto {
   id: string;
@@ -69,8 +70,8 @@ export function PhotoLightbox({ photos, startIndex, onClose }: Props) {
       >
         <Kv label="크기" value={p.width && p.height ? `${p.width}×${p.height}` : "-"} />
         <Kv label="용량" value={p.bytes ? `${Math.round(p.bytes / 1024)} KB` : "-"} />
-        <Kv label="촬영" value={p.exif_taken_at ? new Date(p.exif_taken_at).toLocaleString("ko-KR") : "-"} />
-        <Kv label="업로드" value={p.uploaded_at ? new Date(p.uploaded_at).toLocaleString("ko-KR") : "-"} />
+        <Kv label="촬영" value={fmtDateTimeKst(p.exif_taken_at)} />
+        <Kv label="업로드" value={fmtDateTimeKst(p.uploaded_at)} />
       </div>
 
       {photos.length > 1 && (
