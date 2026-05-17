@@ -122,20 +122,53 @@ export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) 
       {/* 인쇄 영역 */}
       <style>{`
         @media print {
-          .no-print { display: none !important; }
-          body { background: white !important; }
+          /* === 인쇄 격리 (print isolation) ============================================
+             앱 레이아웃의 navbar/footer 와 main 의 padding 이 인쇄 시 첫 페이지를
+             차지해 라벨이 다음 페이지로 밀려나던 문제 해소. visibility 로 모든 것을
+             가린 뒤 .print-area 만 보이게 하고, position: absolute 로 부모의
+             padding/margin 영향을 차단.
+             ========================================================================= */
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          /* 토글 시 화면에 노출되는 toolbar 는 인쇄에서 완전히 제외 (공간도 제거) */
+          .no-print, .no-print * { display: none !important; }
+          .print-area {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          /* Tailwind space-y-* 가 child 마진을 추가해 페이지 사이즈를 초과시키는 것 방지 */
+          .print-area > * + * { margin-top: 0 !important; }
+          body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          html { background: white !important; margin: 0 !important; padding: 0 !important; }
         }
         ${
           mode === "single"
             ? `@page { size: ${labelW}mm ${labelH}mm; margin: 0; }
-               .label-page { width: ${labelW}mm; height: ${labelH}mm; page-break-after: always; margin: 0; }
-               .label-page:last-child { page-break-after: auto; }`
+               .label-page {
+                 width: ${labelW}mm; height: ${labelH}mm;
+                 page-break-after: always; break-after: page;
+                 page-break-inside: avoid; break-inside: avoid;
+                 margin: 0; padding: 0;
+                 box-sizing: border-box;
+                 overflow: hidden;
+                 display: block;
+               }
+               .label-page:last-child { page-break-after: auto; break-after: auto; }`
             : `@page { size: A4; margin: 10mm; }
                .a4-grid { display: grid;
                           grid-template-columns: repeat(${cols}, ${labelW}mm);
                           grid-auto-rows: ${labelH}mm;
-                          gap: 2mm; }
-               .a4-grid > .label-cell { width: ${labelW}mm; height: ${labelH}mm; page-break-inside: avoid; }`
+                          gap: 2mm;
+                          margin: 0; padding: 0; }
+               .a4-grid > .label-cell {
+                 width: ${labelW}mm; height: ${labelH}mm;
+                 page-break-inside: avoid; break-inside: avoid;
+                 box-sizing: border-box; overflow: hidden;
+               }`
         }
         .label-inner {
           width: 100%; height: 100%;
@@ -157,12 +190,15 @@ export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) 
         }
         .label-inner .meta { font-size: 8pt; color: #555; margin-top: 1mm; }
         .label-inner .status-bad { color: #b91c1c; }
-        /* preview 영역에 시각적 경계 — 인쇄 시엔 자동으로 안 보임 */
+        /* preview 영역에 시각적 경계 — 인쇄 시엔 outline 이 페이지 영역 밖으로 안 그려짐 */
         .preview-border { outline: 1px dashed #ccc; outline-offset: -1px; }
+        @media print {
+          .preview-border { outline: none !important; }
+        }
       `}</style>
 
       {mode === "a4" ? (
-        <div className="a4-grid">
+        <div className="a4-grid print-area">
           {items.map((it) => (
             <div key={it.id} className="label-cell preview-border">
               <LabelInner item={it} qrText={qrText(it)} qrSizePx={Math.min(labelH, labelW) * 3.2 /* px ≈ mm × 3.2 */} />
@@ -170,11 +206,13 @@ export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) 
           ))}
         </div>
       ) : (
-        items.map((it) => (
-          <div key={it.id} className="label-page preview-border">
-            <LabelInner item={it} qrText={qrText(it)} qrSizePx={Math.min(labelH, labelW) * 3.2} />
-          </div>
-        ))
+        <div className="print-area space-y-2">
+          {items.map((it) => (
+            <div key={it.id} className="label-page preview-border">
+              <LabelInner item={it} qrText={qrText(it)} qrSizePx={Math.min(labelH, labelW) * 3.2} />
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
