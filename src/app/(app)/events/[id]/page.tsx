@@ -5,6 +5,8 @@ import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { DeleteEventButton } from "@/components/DeleteEventButton";
 import { SpecimenManager } from "@/components/SpecimenManager";
 import { ClickableThumbnail } from "@/components/PhotoLightbox";
+import { AuditTrail } from "@/components/AuditTrail";
+import { listEventAudit, getActorName } from "@/lib/audit/list";
 import type { PhotoCategory } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +50,21 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
       .maybeSingle();
     surveyor = data ?? null;
   }
+
+  // 등록자(생성자) display name — 누구나 볼 수 있도록 audit_log 가 아닌 행의 created_by 로 해석.
+  // surveyor_id 가 있으면 그쪽이 더 의미적으로 정확.
+  const creatorName = await getActorName(event.surveyor_id ?? event.created_by ?? null);
+
+  // 감사 로그 — RLS 에 의해 admin 만 select 가능. 비 admin 은 빈 배열을 받음.
+  // 클라이언트 컴포넌트에 넘기되, role !== "admin" 인 경우 섹션 자체를 숨긴다.
+  const auditEntries =
+    role === "admin"
+      ? await listEventAudit({
+          eventId: event.id,
+          treeId: (event as any).tree?.id ?? null,
+          siteId: (event as any).tree?.site?.id ?? null,
+        })
+      : [];
 
   const { data: photos } = await sb
     .from("photos")
@@ -156,6 +173,22 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
                 )}
               </div>
             )}
+
+            {/* 등록 / 최종 수정 — 누구나 볼 수 있음. 상세 변경 이력은 admin 만 페이지 하단에서. */}
+            <div className="mt-3 text-[11px] text-stone-500 border-t border-brand-200/50 pt-2">
+              <span className="font-semibold text-stone-600">등록</span>{" "}
+              {creatorName ?? <span className="italic">알 수 없음</span>}
+              {event.created_at && (
+                <> · {new Date(event.created_at).toLocaleString("ko-KR")}</>
+              )}
+              {event.updated_at && event.updated_at !== event.created_at && (
+                <>
+                  <span className="mx-2 text-stone-400">|</span>
+                  <span className="font-semibold text-stone-600">최종 수정</span>{" "}
+                  {new Date(event.updated_at).toLocaleString("ko-KR")}
+                </>
+              )}
+            </div>
           </div>
 
           {/* 수종/개체목 수정 — 수종은 tree 테이블이 owner */}
@@ -282,6 +315,9 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
           })}
         </div>
       </section>
+
+      {/* 7) 변경 이력 — admin 만 노출. audit_log RLS 가 한 번 더 막아 비 admin 이 우회 호출해도 빈 결과. */}
+      {role === "admin" && <AuditTrail entries={auditEntries} />}
     </div>
   );
 }
