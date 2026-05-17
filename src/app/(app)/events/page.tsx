@@ -87,7 +87,25 @@ export default async function EventsListPage(props: { searchParams: Promise<Sear
     if (searchParams.specimen_type) sq = sq.eq("type_code", searchParams.specimen_type);
     if (searchParams.storage) sq = sq.eq("storage_location", searchParams.storage);
     const { data: specIds } = await sq.limit(5000);
-    eventIdsBySpecimen = Array.from(new Set((specIds ?? []).map((r: any) => r.root_event_id))).filter(Boolean);
+    const collected = new Set<string>(
+      ((specIds ?? []) as Array<{ root_event_id: string | null }>)
+        .map((r) => r.root_event_id)
+        .filter((v): v is string => !!v),
+    );
+
+    // 특수 케이스: N(DNA) 필터는 legacy sampling_events.dna_collected=true 야장도 포함.
+    // 마이그레이션 011 backfill 이 안 됐거나, 옛 폼이 boolean 만 갱신했을 가능성 양수겸장.
+    // storage 필터가 함께 걸리면 보관 위치 매칭은 specimens 행이 있어야만 가능하므로 보강 생략.
+    if (searchParams.specimen_type === "N" && !searchParams.storage) {
+      const { data: dnaEvents } = await sb
+        .from("sampling_events")
+        .select("id")
+        .eq("dna_collected", true)
+        .limit(5000);
+      (dnaEvents ?? []).forEach((e: any) => { if (e?.id) collected.add(e.id); });
+    }
+
+    eventIdsBySpecimen = Array.from(collected);
   }
 
   // 3) 메인 쿼리 — 수종 마스터 / 사진 / 시편을 함께 조인
