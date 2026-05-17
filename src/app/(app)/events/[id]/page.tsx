@@ -21,14 +21,16 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
   const sb = await getSupabaseServer();
   const { role } = await getCurrentUserAndRole();
 
+  // 수종 마스터(species)까지 함께 조인해 상단 hero 에서 한글명·학명을 바로 표시.
   const { data: event } = await sb
     .from("sampling_events")
     .select(`
       *,
       tree:trees(
         id, tree_local_no, species_code, lat, lon, lat_dms, lon_dms,
-        elevation_m, aspect_deg, status,
-        site:sites(id, code, region_sido, region_sigungu, address_detail, habitat_terrain)
+        elevation_m, aspect_deg, status, tag_id,
+        species:species(code, ko_name, sci_name, family),
+        site:sites(id, code, region_sido, region_sigungu, region_sigungu_code, address_detail, habitat_terrain)
       )
     `)
     .eq("id", params.id)
@@ -63,57 +65,128 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
 
   const tree = (event as any).tree;
   const site = tree?.site;
+  const species = tree?.species ?? null;
+  const koName: string | null = species?.ko_name ?? null;
+  const sciName: string | null = species?.sci_name ?? null;
+  const family: string | null = species?.family ?? null;
 
   return (
     <div className="space-y-6">
-      {/* 헤더 */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs text-stone-500">채취 야장</div>
-          <h1 className="text-2xl font-bold">{event.sample_no}</h1>
-          <div className="text-sm text-stone-500 mt-1">
-            {new Date(event.sampled_at).toLocaleDateString("ko-KR", { dateStyle: "long" })}
-            {surveyor?.display_name && <> · 조사자 {surveyor.display_name}</>}
-          </div>
-        </div>
-        {event.sync_status !== "synced" && (
-          <span className="text-xs rounded bg-amber-100 text-amber-900 px-2 py-1">
-            {event.sync_status}
-          </span>
-        )}
-      </div>
-
-      {/* 액션 + 빠른 링크 */}
+      {/* 액션 + 빠른 링크 (상단 도구바) */}
       <div className="flex gap-2 flex-wrap items-center">
-        <Link href={`/events/${event.id}/edit`} className="btn-secondary text-xs">
-          ✎ 수정
+        <Link href="/events" className="text-sm text-stone-500 hover:underline">
+          ← 야장 목록
         </Link>
+        <div className="grow" />
         {role === "admin" && (
           <DeleteEventButton id={event.id} sampleNo={event.sample_no} />
         )}
-        <div className="grow" />
-        {site && (
-          <Link href={`/sites/${site.id}`} className="btn-secondary text-xs">
-            ← 지점: {site.code}
-          </Link>
-        )}
-        {tree && (
-          <Link href={`/trees/${tree.id}`} className="btn-secondary text-xs">
-            ← 개체목 #{tree.tree_local_no} 이력 보기
-          </Link>
-        )}
       </div>
 
-      {/* 채취 기본 정보 */}
+      {/* 1) 수종 + 핵심 컨텍스트 HERO — 야장 목록의 한 줄을 펼친 요약 */}
+      <section className="card bg-brand-50/40 border-brand-200">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] uppercase tracking-wider text-brand-700 font-semibold">수종</div>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-bold truncate">{koName ?? "수종 미지정"}</h1>
+              {sciName && (
+                <span className="italic text-stone-600 text-base truncate">{sciName}</span>
+              )}
+              {tree?.species_code && (
+                <span className="text-xs font-mono bg-white border border-brand-200 text-brand-700 px-2 py-0.5 rounded">
+                  {tree.species_code}
+                </span>
+              )}
+            </div>
+            {family && <p className="text-xs text-stone-500 mt-0.5">과: {family}</p>}
+
+            {/* 채취 컨텍스트 */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <Mini label="채취 번호" value={event.sample_no} mono />
+              <Mini
+                label="채취일"
+                value={new Date(event.sampled_at).toLocaleDateString("ko-KR")}
+              />
+              <Mini label="수고" value={event.height_m != null ? `${event.height_m} m` : "-"} />
+              <Mini label="DBH" value={event.dbh_cm != null ? `${event.dbh_cm} cm` : "-"} />
+            </div>
+
+            {/* 지점 요약 + 빠른 이동 */}
+            <div className="mt-3 text-xs text-stone-600">
+              {site && (
+                <>
+                  <span>📍 </span>
+                  {site.region_sido && <span>{site.region_sido} </span>}
+                  <span>{site.region_sigungu ?? "지점 미지정"}</span>
+                  <span className="mx-1.5 text-stone-400">·</span>
+                  <Link href={`/sites/${site.id}`} className="font-mono hover:underline">
+                    {site.code}
+                  </Link>
+                  {tree?.tree_local_no && (
+                    <>
+                      <span className="mx-1.5 text-stone-400">·</span>
+                      <Link href={`/trees/${tree.id}`} className="hover:underline">
+                        개체목 #{tree.tree_local_no}
+                      </Link>
+                    </>
+                  )}
+                  {surveyor?.display_name && (
+                    <>
+                      <span className="mx-1.5 text-stone-400">·</span>
+                      <span>조사자 {surveyor.display_name}</span>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* 배지 */}
+            {(event.dna_collected || event.sync_status !== "synced") && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {event.dna_collected && (
+                  <span className="text-[11px] rounded bg-amber-100 text-amber-900 px-2 py-0.5">
+                    DNA 채취{event.dna_sample_code ? ` · ${event.dna_sample_code}` : ""}
+                  </span>
+                )}
+                {event.sync_status !== "synced" && (
+                  <span className="text-[11px] rounded bg-orange-100 text-orange-900 px-2 py-0.5">
+                    동기화: {event.sync_status}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 수종/개체목 수정 — 수종은 tree 테이블이 owner */}
+          {tree && (
+            <Link href={`/trees/${tree.id}/edit`} className="btn-secondary text-xs shrink-0">
+              ✎ 수종/개체목 수정
+            </Link>
+          )}
+        </div>
+      </section>
+
+      {/* 2) 시편(specimens) — 사용자 요청에 따라 수종 hero 다음 위치 */}
+      <SpecimenManager
+        eventId={event.id}
+        sampleNo={event.sample_no}
+        canWrite={role === "admin" || role === "lead"}
+      />
+
+      {/* 3) 채취 기본 정보 (event 테이블 필드) */}
       <section className="card">
-        <h2 className="text-base font-bold text-brand-700 mb-3">채취 기본 정보</h2>
+        <SectionHeader title="채취 기본 정보" editHref={`/events/${event.id}/edit`} editLabel="✎ 야장 수정" />
         <Grid>
-          <KV label="채취 번호" value={event.sample_no} />
+          <KV label="채취 번호" value={event.sample_no} mono />
           <KV label="채취일" value={new Date(event.sampled_at).toLocaleDateString("ko-KR")} />
           <KV label="수고" value={event.height_m != null ? `${event.height_m} m` : "-"} />
           <KV label="DBH" value={event.dbh_cm != null ? `${event.dbh_cm} cm` : "-"} />
           <KV label="DNA 채취" value={event.dna_collected ? `✓ ${event.dna_sample_code ?? ""}` : "—"} />
-          <KV label="기기 입력 시각" value={event.device_recorded_at ? new Date(event.device_recorded_at).toLocaleString("ko-KR") : "-"} />
+          <KV
+            label="기기 입력 시각"
+            value={event.device_recorded_at ? new Date(event.device_recorded_at).toLocaleString("ko-KR") : "-"}
+          />
         </Grid>
         {event.notes && (
           <div className="mt-3">
@@ -123,30 +196,40 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
         )}
       </section>
 
-      {/* 개체목 */}
+      {/* 4) 개체목·위치 (tree 테이블 필드) */}
       {tree && (
         <section className="card">
-          <h2 className="text-base font-bold text-brand-700 mb-3">개체목</h2>
+          <SectionHeader title="개체목·위치" editHref={`/trees/${tree.id}/edit`} editLabel="✎ 개체목 수정" />
           <Grid>
             <KV label="개체목 번호" value={`#${tree.tree_local_no}`} />
-            <KV label="수종 코드" value={tree.species_code ?? "-"} />
-            <KV label="위도" value={tree.lat != null ? `${tree.lat.toFixed(6)} (${tree.lat_dms ?? ""})` : "-"} mono />
-            <KV label="경도" value={tree.lon != null ? `${tree.lon.toFixed(6)} (${tree.lon_dms ?? ""})` : "-"} mono />
+            <KV label="수종 코드" value={tree.species_code ?? "-"} mono />
+            <KV
+              label="위도"
+              value={tree.lat != null ? `${tree.lat.toFixed(6)}${tree.lat_dms ? ` (${tree.lat_dms})` : ""}` : "-"}
+              mono
+            />
+            <KV
+              label="경도"
+              value={tree.lon != null ? `${tree.lon.toFixed(6)}${tree.lon_dms ? ` (${tree.lon_dms})` : ""}` : "-"}
+              mono
+            />
             <KV label="해발고" value={tree.elevation_m != null ? `${tree.elevation_m} m` : "-"} />
             <KV label="방위" value={tree.aspect_deg != null ? `${tree.aspect_deg}°` : "-"} />
             <KV label="상태" value={tree.status} />
+            {tree.tag_id && <KV label="태그 ID" value={tree.tag_id} mono />}
           </Grid>
         </section>
       )}
 
-      {/* 지점 */}
+      {/* 5) 조사 지점 (site 테이블 필드) */}
       {site && (
         <section className="card">
-          <h2 className="text-base font-bold text-brand-700 mb-3">조사 지점</h2>
+          <SectionHeader title="조사 지점" editHref={`/sites/${site.id}/edit`} editLabel="✎ 지점 수정" />
           <Grid>
-            <KV label="지점 코드" value={site.code} />
+            <KV label="지점 코드" value={site.code} mono />
             <KV label="시도" value={site.region_sido ?? "-"} />
             <KV label="시군구" value={site.region_sigungu ?? "-"} />
+            <KV label="시군구 코드" value={site.region_sigungu_code ?? "-"} mono />
             <KV label="지형" value={site.habitat_terrain ?? "-"} />
           </Grid>
           {site.address_detail && (
@@ -158,21 +241,14 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
         </section>
       )}
 
-      {/* 시편(specimens) — 야장에서 파생되는 모든 물리적 시편(디스크/블록/슬라이드/연륜표본/해리섬유/추출물 등) 의 다단계 트리.
-          쓰기는 admin/lead 만 (사용자 정책). human_code 는 서버 RPC 가 자동 생성. */}
-      <SpecimenManager
-        eventId={event.id}
-        sampleNo={event.sample_no}
-        canWrite={role === "admin" || role === "lead"}
-      />
-
-      {/* DNA 분석 결과는 시편(X Extract 등) 상세 페이지에서 관리합니다.
-          야장은 채취 단계 기록이라 분석 결과가 직접 매달리지 않음 — 야장의 「DNA 시료
-          채취」 체크는 그대로 현장 정보로 의미. */}
-
-      {/* 사진 — 클릭 시 라이트박스로 원본+EXIF 보기 */}
+      {/* 6) 사진 — 클릭 시 라이트박스로 원본+EXIF 보기 */}
       <section>
-        <h2 className="text-base font-bold text-brand-700 mb-3">사진</h2>
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h2 className="text-base font-bold text-brand-700">사진</h2>
+          <Link href={`/events/${event.id}/edit`} className="btn-secondary text-xs">
+            ✎ 사진 관리
+          </Link>
+        </div>
         <p className="text-xs text-stone-500 mb-3">썸네일을 탭하면 원본 크기로 보고 좌/우 화살표로 넘길 수 있습니다.</p>
         <div className="grid grid-cols-2 gap-3">
           {(Object.keys(PHOTO_LABELS) as PhotoCategory[]).map((cat) => {
@@ -210,6 +286,17 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
   );
 }
 
+function SectionHeader({ title, editHref, editLabel }: { title: string; editHref: string; editLabel: string }) {
+  return (
+    <div className="flex items-center justify-between mb-3 gap-2">
+      <h2 className="text-base font-bold text-brand-700">{title}</h2>
+      <Link href={editHref} className="btn-secondary text-xs shrink-0">
+        {editLabel}
+      </Link>
+    </div>
+  );
+}
+
 function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-3 text-sm">{children}</div>;
 }
@@ -219,6 +306,15 @@ function KV({ label, value, mono = false }: { label: string; value: string; mono
     <div>
       <div className="field-label">{label}</div>
       <div className={`mt-0.5 ${mono ? "font-mono text-xs" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function Mini({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-stone-500">{label}</div>
+      <div className={`mt-0.5 font-semibold truncate ${mono ? "font-mono text-xs" : ""}`}>{value}</div>
     </div>
   );
 }

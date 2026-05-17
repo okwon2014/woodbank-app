@@ -17,9 +17,14 @@ export default async function SiteDetail(props: { params: Promise<{ id: string }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">{site.code}</h1>
-        <p className="text-sm text-stone-500">{site.region_sigungu} · {site.address_detail}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">{site.code}</h1>
+          <p className="text-sm text-stone-500">{site.region_sigungu} · {site.address_detail}</p>
+        </div>
+        <Link href={`/sites/${site.id}/edit`} className="btn-secondary text-xs shrink-0">
+          ✎ 수정
+        </Link>
       </div>
       <div className="card">
         <div className="grid grid-cols-2 gap-3 text-sm">
