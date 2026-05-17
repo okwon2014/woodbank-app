@@ -146,21 +146,43 @@ npm run typecheck && npm test
 - `git push -u origin <branch>` 후 `gh pr create` — 제목은 커밋과 동일, 본문은 `## Summary` / `## 운영자 액션` / `## Test plan`.
 - **main 직접 push 금지.** 항상 PR로.
 
-### 2.5) 머지 후 메인 worktree 동기화 (필수)
-PR 이 머지되면 항상 메인 worktree 도 같이 갱신한다. 안 그러면 Finder/IDE 가
-열고 있는 `~/Dropbox/.../woodbank-app/` 폴더엔 새 파일(마이그레이션 SQL,
-신규 컴포넌트 등)이 안 보여 운영자가 "파일이 없다"고 혼란스러워 한다.
+### 2.5) PR 자동 머지 + 메인 worktree 동기화 (기본 동작)
+
+기능 확인은 머지 후 Vercel 배포가 끝나야 가능하므로, 안전한 변경은
+사용자 지시 없이 PR 직후 자동 머지한다. 아래 자동/수동 매트릭스에 따라.
+
+**🟢 자동 머지 (push → PR → 즉시 merge → sync)** — 모든 조건 충족 시:
+- 「운영자 액션」의 **Supabase = "없음"**
+- 「운영자 액션」의 **Vercel = "없음"** (환경변수 추가 없음)
+- 파괴적 SQL (DROP/DELETE/TRUNCATE), RLS 정책 변경 없음
+- typecheck/test 게이트 통과
+- 충돌 없이 깔끔한 push (force-push 불필요)
+
+PWA `sw.js` VERSION 증가, Dexie 추가형 스키마 변경, README 갱신은 자동
+적용되므로 자동 머지 대상에 포함 (사용자에게 보고만 한다).
 
 ```bash
+# PR 생성 직후 자동 실행:
 gh pr merge <num> --squash
-gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>   # 원격 브랜치 정리
-cd /Users/zoom/Dropbox/woodbank_team_space/woodbank-app         # 메인 worktree
-git checkout -- package-lock.json 2>/dev/null || true           # 잡음 diff 만 있을 때
+gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch>
+cd /Users/zoom/Dropbox/woodbank_team_space/woodbank-app
+git checkout -- package-lock.json 2>/dev/null || true
 git pull origin main --ff-only
 ```
 
-머지된 SQL 마이그레이션이 있으면 위 pull 결과에 그 파일명이 나타나는지
-운영자 액션 보고에 한 번 더 환기.
+**🔴 사용자 확인 필요 (PR만 만들고 멈춤)** — 다음 중 하나라도 해당:
+1. 새 Supabase 마이그레이션 파일 (`supabase/migrations/*.sql` 신규)
+2. 새 환경변수 요구
+3. 파괴적 SQL — DROP / DELETE / TRUNCATE / 명시적 데이터 손실
+4. RLS 정책 추가/변경 — 사용자 lock-out 위험
+5. stale-base 충돌로 force-push 가 필요했던 경우 (PR #22 사례)
+6. PR 본문에 `🔴` 또는 `WARNING` / `BREAKING` 표식이 있을 때
+
+위 경우 PR 만들고 멈춰서 **"🔴 운영자 액션 필요 — 머지 확인 부탁드립니다"**
+로 명시. 운영자가 확인 후 "PR #N 머지해줘" 라고 하면 그제야 머지.
+
+머지된 SQL 마이그레이션이 있으면 (수동 머지 경로) pull 결과에 그 파일명이
+나타나는지 운영자 액션 보고에 한 번 더 환기.
 
 ### 3) 운영자 액션 보고 (PR 본문 + 채팅 양쪽에)
 변경 종류별로 다음을 정확히 명시한다. **해당 없음이면 "없음"이라고 적기** — 빠뜨리면 운영자가 추측하게 된다.
