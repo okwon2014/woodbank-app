@@ -1,149 +1,300 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { SpecimenQrCode } from "./SpecimenQrCode";
+import { SpecimenPicker } from "./SpecimenPicker";
+import type { SpecimenTypeCode } from "@/types/db";
 
-interface LabelItem {
+// 라벨 표시·검색에 필요한 시편 정보 묶음.
+// 서버 페이지와 SpecimenPicker 양쪽에서 공유.
+export interface LabelItem {
   id: string;
   human_code: string;
+  type_code: SpecimenTypeCode;
   type_label: string;
   status: string;
+  species_ko: string | null;
+  species_sci: string | null;
+  species_code: string | null;
+  sample_no: string | null;
 }
 
 type Mode = "a4" | "single";
 
 interface Props {
-  items: LabelItem[];
+  initialItems: LabelItem[];
   defaultMode: Mode;
   defaultSize: { w: number; h: number }; // mm
+}
+
+// 선택된 시편: 기본 정보 + 인쇄 매수.
+interface SelectedRow {
+  item: LabelItem;
+  quantity: number;
 }
 
 // 라벨 인쇄 — 두 모드.
 //
 // A4 격자: 일반 A4 라벨지(또는 일반 A4 잘라쓰기)에 행·열로 라벨 정렬.
-//   기본 3 컬럼 × 7 행 = 한 페이지 21장. 라벨 크기·여백을 사용자가 조정.
+//   기본 3 컬럼 × 7 행 = 한 페이지 21장. 라벨 크기·간격·여백을 조정.
 //
 // 단일 라벨 프린터: 한 페이지 = 한 라벨. @page size 를 라벨 크기로 지정.
 //   Brother QL/DYMO/Zebra 같은 라벨 프린터에서 그대로 출력.
 //
-// QR 텍스트는 사람용 코드 그대로(스캐너가 텍스트로 받음). URL 화 옵션은
-// 「URL 로 인쇄」 토글로.
-export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) {
+// 선택된 시편은 quantity 만큼 펼쳐서 라벨로 렌더. 즉 "팽나무 D01 × 3장"
+// 식으로 한 시편을 여러 장 인쇄 가능.
+export function SpecimenPrintClient({ initialItems, defaultMode, defaultSize }: Props) {
+  // 선택 상태 — id → SelectedRow. 순서 보존을 위해 배열로 관리.
+  const [selected, setSelected] = useState<SelectedRow[]>(
+    initialItems.map((item) => ({ item, quantity: 1 })),
+  );
+  const selectedIdSet = useMemo(() => new Set(selected.map((s) => s.item.id)), [selected]);
+
+  // 레이아웃 옵션
   const [mode, setMode] = useState<Mode>(defaultMode);
   const [labelW, setLabelW] = useState<number>(defaultSize.w);
   const [labelH, setLabelH] = useState<number>(defaultSize.h);
   const [cols, setCols] = useState<number>(3);
   const [rows, setRows] = useState<number>(7);
+  const [gap, setGap] = useState<number>(2); // mm
+  const [pageMargin, setPageMargin] = useState<number>(10); // mm, A4 전체 여백
   const [qrAsUrl, setQrAsUrl] = useState<boolean>(false);
+  const [showSpecies, setShowSpecies] = useState<boolean>(true);
+
+  // 선택 조작 헬퍼
+  function addItem(item: LabelItem) {
+    setSelected((cur) => (cur.some((s) => s.item.id === item.id) ? cur : [...cur, { item, quantity: 1 }]));
+  }
+  function removeItem(id: string) {
+    setSelected((cur) => cur.filter((s) => s.item.id !== id));
+  }
+  function setQuantity(id: string, q: number) {
+    const clamped = Math.max(1, Math.min(200, Math.floor(q) || 1));
+    setSelected((cur) => cur.map((s) => (s.item.id === id ? { ...s, quantity: clamped } : s)));
+  }
+  function setAllQuantity(q: number) {
+    const clamped = Math.max(1, Math.min(200, Math.floor(q) || 1));
+    setSelected((cur) => cur.map((s) => ({ ...s, quantity: clamped })));
+  }
+  function clearAll() {
+    if (selected.length > 0 && !confirm("선택한 시편을 모두 제거할까요?")) return;
+    setSelected([]);
+  }
+
+  // quantity 만큼 펼친 인쇄 항목들. 같은 시편은 _copy 인덱스로 React key 충돌 회피.
+  const renderItems = useMemo(
+    () =>
+      selected.flatMap((s) =>
+        Array.from({ length: s.quantity }, (_, i) => ({
+          ...s.item,
+          _key: `${s.item.id}#${i + 1}`,
+        })),
+      ),
+    [selected],
+  );
+
+  const totalLabels = renderItems.length;
 
   const qrText = (item: LabelItem) =>
     qrAsUrl
-      ? (typeof window !== "undefined" ? `${window.location.origin}/specimens/${item.id}` : `/specimens/${item.id}`)
+      ? typeof window !== "undefined"
+        ? `${window.location.origin}/specimens/${item.id}`
+        : `/specimens/${item.id}`
       : item.human_code;
 
   return (
     <div className="space-y-3">
       {/* toolbar — 인쇄 시 숨김 */}
-      <div className="no-print rounded-xl border border-stone-200 bg-white p-3 space-y-2 text-xs">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h1 className="text-base font-bold">라벨 인쇄 — {items.length}장</h1>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="btn-primary"
-          >
-            🖨 인쇄
-          </button>
+      <div className="no-print space-y-3">
+        <div className="rounded-xl border border-stone-200 bg-white p-3 space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h1 className="text-base font-bold">
+              라벨 인쇄 — 선택 {selected.length}종 · 총 <span className="text-brand-700">{totalLabels}장</span>
+            </h1>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={totalLabels === 0}
+              className="btn-primary"
+            >
+              🖨 인쇄
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="inline-flex items-center gap-1">
+              <input type="radio" name="mode" checked={mode === "a4"} onChange={() => setMode("a4")} />
+              A4 격자
+            </label>
+            <label className="inline-flex items-center gap-1">
+              <input type="radio" name="mode" checked={mode === "single"} onChange={() => setMode("single")} />
+              라벨 프린터 단일
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="inline-flex items-center gap-1">
+              라벨 가로
+              <input
+                type="number" min={20} max={210}
+                value={labelW}
+                onChange={(e) => setLabelW(Math.max(20, Math.min(210, parseInt(e.target.value || "0", 10) || 50)))}
+                className="w-16 border border-stone-300 rounded px-1 py-0.5 text-right"
+              /> mm
+            </label>
+            <label className="inline-flex items-center gap-1">
+              세로
+              <input
+                type="number" min={15} max={297}
+                value={labelH}
+                onChange={(e) => setLabelH(Math.max(15, Math.min(297, parseInt(e.target.value || "0", 10) || 30)))}
+                className="w-16 border border-stone-300 rounded px-1 py-0.5 text-right"
+              /> mm
+            </label>
+            {mode === "a4" && (
+              <>
+                <label className="inline-flex items-center gap-1">
+                  열 수
+                  <input
+                    type="number" min={1} max={10}
+                    value={cols}
+                    onChange={(e) => setCols(Math.max(1, Math.min(10, parseInt(e.target.value || "0", 10) || 3)))}
+                    className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
+                  />
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  행 수
+                  <input
+                    type="number" min={1} max={30}
+                    value={rows}
+                    onChange={(e) => setRows(Math.max(1, Math.min(30, parseInt(e.target.value || "0", 10) || 7)))}
+                    className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
+                  />
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  라벨 간격
+                  <input
+                    type="number" min={0} max={20} step="0.5"
+                    value={gap}
+                    onChange={(e) => setGap(Math.max(0, Math.min(20, parseFloat(e.target.value || "0") || 0)))}
+                    className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
+                  /> mm
+                </label>
+                <label className="inline-flex items-center gap-1">
+                  페이지 여백
+                  <input
+                    type="number" min={0} max={50} step="0.5"
+                    value={pageMargin}
+                    onChange={(e) => setPageMargin(Math.max(0, Math.min(50, parseFloat(e.target.value || "0") || 0)))}
+                    className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
+                  /> mm
+                </label>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="inline-flex items-center gap-1">
+              <input type="checkbox" checked={showSpecies} onChange={(e) => setShowSpecies(e.target.checked)} />
+              수종명을 라벨에 표시
+            </label>
+            <label className="inline-flex items-center gap-1">
+              <input type="checkbox" checked={qrAsUrl} onChange={(e) => setQrAsUrl(e.target.checked)} />
+              QR 을 URL 로 (스캔 시 시편 상세 페이지로 이동)
+            </label>
+          </div>
+
+          <p className="text-stone-500">
+            ※ 라벨 프린터(예: Brother QL)는 「단일」 모드 + 라벨 실제 크기로. A4 라벨지(예: Formtec)는 「A4 격자」 모드 + 라벨지 사양에 맞춰 가로·세로·열·행·간격을 조정. 인쇄 직전 브라우저 미리보기에서 정확히 들어맞는지 확인하세요.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <label className="inline-flex items-center gap-1">
-            <input type="radio" name="mode" checked={mode === "a4"} onChange={() => setMode("a4")} />
-            A4 격자
-          </label>
-          <label className="inline-flex items-center gap-1">
-            <input type="radio" name="mode" checked={mode === "single"} onChange={() => setMode("single")} />
-            라벨 프린터 단일
-          </label>
-        </div>
+        {/* 시편 추가 (검색) */}
+        <SpecimenPicker existingIds={selectedIdSet} onAdd={addItem} />
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="inline-flex items-center gap-1">
-            라벨 가로
-            <input
-              type="number" min={20} max={210}
-              value={labelW}
-              onChange={(e) => setLabelW(Math.max(20, Math.min(210, parseInt(e.target.value || "0", 10) || 50)))}
-              className="w-16 border border-stone-300 rounded px-1 py-0.5 text-right"
-            /> mm
-          </label>
-          <label className="inline-flex items-center gap-1">
-            세로
-            <input
-              type="number" min={15} max={297}
-              value={labelH}
-              onChange={(e) => setLabelH(Math.max(15, Math.min(297, parseInt(e.target.value || "0", 10) || 30)))}
-              className="w-16 border border-stone-300 rounded px-1 py-0.5 text-right"
-            /> mm
-          </label>
-          {mode === "a4" && (
-            <>
-              <label className="inline-flex items-center gap-1">
-                열 수
-                <input
-                  type="number" min={1} max={6}
-                  value={cols}
-                  onChange={(e) => setCols(Math.max(1, Math.min(6, parseInt(e.target.value || "0", 10) || 3)))}
-                  className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
-                />
-              </label>
-              <label className="inline-flex items-center gap-1">
-                행 수
-                <input
-                  type="number" min={1} max={20}
-                  value={rows}
-                  onChange={(e) => setRows(Math.max(1, Math.min(20, parseInt(e.target.value || "0", 10) || 7)))}
-                  className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
-                />
-              </label>
-            </>
+        {/* 선택된 시편 목록 */}
+        <div className="rounded-xl border border-stone-200 bg-white p-3 space-y-2 text-xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <h2 className="text-sm font-bold">
+              선택된 시편 ({selected.length}종 · 총 {totalLabels}장)
+            </h2>
+            {selected.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1">
+                  모두 N장씩:
+                  <input
+                    type="number" min={1} max={200}
+                    defaultValue={1}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value || "1", 10);
+                      if (n >= 1 && n <= 200) setAllQuantity(n);
+                    }}
+                    className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
+                  />
+                </label>
+                <button type="button" onClick={clearAll} className="text-rose-700 hover:underline">
+                  전체 제거
+                </button>
+              </div>
+            )}
+          </div>
+
+          {selected.length === 0 ? (
+            <p className="text-stone-500 p-3 text-center bg-stone-50 rounded">
+              선택된 시편이 없습니다. 위 검색에서 추가하세요.
+            </p>
+          ) : (
+            <ul className="divide-y divide-stone-100 border border-stone-200 rounded max-h-96 overflow-y-auto">
+              {selected.map((s) => (
+                <li key={s.item.id} className="flex items-center gap-2 p-2 hover:bg-stone-50">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-xs truncate">{s.item.human_code}</div>
+                    <div className="text-[11px] text-stone-500 truncate">
+                      {s.item.species_ko ?? s.item.species_code ?? "(수종 미정)"} · {s.item.type_label}
+                      {s.item.status !== "active" && (
+                        <span className="ml-1 text-rose-700">· {s.item.status}</span>
+                      )}
+                    </div>
+                  </div>
+                  <label className="inline-flex items-center gap-1 text-[11px]">
+                    수량
+                    <input
+                      type="number" min={1} max={200}
+                      value={s.quantity}
+                      onChange={(e) => setQuantity(s.item.id, parseInt(e.target.value || "1", 10))}
+                      className="w-14 border border-stone-300 rounded px-1 py-0.5 text-right"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(s.item.id)}
+                    className="text-[11px] text-rose-700 hover:underline px-1"
+                    title="목록에서 제거"
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-          <label className="inline-flex items-center gap-1">
-            <input type="checkbox" checked={qrAsUrl} onChange={(e) => setQrAsUrl(e.target.checked)} />
-            QR 을 URL 로 (스캔 시 시편 상세 페이지로 이동)
-          </label>
         </div>
-
-        <p className="text-stone-500">
-          ※ 라벨 프린터(예: Brother QL)는 「단일」 모드 + 라벨 실제 크기로. A4 라벨지(예: Formtec)는 「A4 격자」 모드 + 라벨지 사양에 맞춰 가로·세로·열·행을 조정. 인쇄 직전 브라우저 미리보기에서 정확히 들어맞는지 확인하세요.
-        </p>
       </div>
 
       {/* 인쇄 영역 */}
       <style>{`
         @media print {
-          /* === 인쇄 격리 (print isolation) ============================================
-             앱 레이아웃의 navbar/footer 와 main 의 padding 이 인쇄 시 첫 페이지를
-             차지해 라벨이 다음 페이지로 밀려나던 문제 해소. visibility 로 모든 것을
-             가린 뒤 .print-area 만 보이게 하고, position: absolute 로 부모의
-             padding/margin 영향을 차단.
-             ========================================================================= */
+          /* === 인쇄 격리 — PR #26 에서 도입한 패턴 그대로 ===
+             앱 레이아웃의 navbar/footer·main padding 이 첫 페이지를 점유하던 문제 차단. */
           body * { visibility: hidden !important; }
           .print-area, .print-area * { visibility: visible !important; }
-          /* 토글 시 화면에 노출되는 toolbar 는 인쇄에서 완전히 제외 (공간도 제거) */
           .no-print, .no-print * { display: none !important; }
           .print-area {
             position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            right: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            left: 0 !important; top: 0 !important; right: 0 !important;
+            margin: 0 !important; padding: 0 !important;
           }
-          /* Tailwind space-y-* 가 child 마진을 추가해 페이지 사이즈를 초과시키는 것 방지 */
           .print-area > * + * { margin-top: 0 !important; }
-          body { background: white !important; margin: 0 !important; padding: 0 !important; }
-          html { background: white !important; margin: 0 !important; padding: 0 !important; }
+          body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
         }
         ${
           mode === "single"
@@ -158,11 +309,11 @@ export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) 
                  display: block;
                }
                .label-page:last-child { page-break-after: auto; break-after: auto; }`
-            : `@page { size: A4; margin: 10mm; }
+            : `@page { size: A4; margin: ${pageMargin}mm; }
                .a4-grid { display: grid;
                           grid-template-columns: repeat(${cols}, ${labelW}mm);
                           grid-auto-rows: ${labelH}mm;
-                          gap: 2mm;
+                          gap: ${gap}mm;
                           margin: 0; padding: 0; }
                .a4-grid > .label-cell {
                  width: ${labelW}mm; height: ${labelH}mm;
@@ -180,36 +331,53 @@ export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) 
           overflow: hidden;
         }
         .label-inner .qr { flex-shrink: 0; }
-        .label-inner .text { flex: 1; min-width: 0; }
+        .label-inner .text { flex: 1; min-width: 0; line-height: 1.15; }
+        .label-inner .species {
+          font-weight: 700;
+          font-size: 10pt;
+          margin-bottom: 0.5mm;
+          /* 한 줄 truncate — 라벨이 좁아 두 줄이면 가독성 나빠짐 */
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         .label-inner .code {
           font-family: ui-monospace, Menlo, Consolas, monospace;
           font-weight: 700;
-          font-size: 11pt;
-          line-height: 1.15;
+          font-size: 9pt;
           word-break: break-all;
         }
-        .label-inner .meta { font-size: 8pt; color: #555; margin-top: 1mm; }
+        .label-inner .meta { font-size: 7pt; color: #555; margin-top: 0.5mm; }
         .label-inner .status-bad { color: #b91c1c; }
-        /* preview 영역에 시각적 경계 — 인쇄 시엔 outline 이 페이지 영역 밖으로 안 그려짐 */
         .preview-border { outline: 1px dashed #ccc; outline-offset: -1px; }
-        @media print {
-          .preview-border { outline: none !important; }
-        }
+        @media print { .preview-border { outline: none !important; } }
       `}</style>
 
-      {mode === "a4" ? (
+      {totalLabels === 0 ? (
+        <p className="no-print text-sm text-stone-400 text-center p-8 border border-dashed border-stone-200 rounded-xl">
+          위에서 시편을 선택하면 여기에 라벨 미리보기가 나타납니다.
+        </p>
+      ) : mode === "a4" ? (
         <div className="a4-grid print-area">
-          {items.map((it) => (
-            <div key={it.id} className="label-cell preview-border">
-              <LabelInner item={it} qrText={qrText(it)} qrSizePx={Math.min(labelH, labelW) * 3.2 /* px ≈ mm × 3.2 */} />
+          {renderItems.map((it) => (
+            <div key={it._key} className="label-cell preview-border">
+              <LabelInner
+                item={it}
+                qrText={qrText(it)}
+                qrSizePx={Math.min(labelH, labelW) * 3.2}
+                showSpecies={showSpecies}
+              />
             </div>
           ))}
         </div>
       ) : (
         <div className="print-area space-y-2">
-          {items.map((it) => (
-            <div key={it.id} className="label-page preview-border">
-              <LabelInner item={it} qrText={qrText(it)} qrSizePx={Math.min(labelH, labelW) * 3.2} />
+          {renderItems.map((it) => (
+            <div key={it._key} className="label-page preview-border">
+              <LabelInner
+                item={it}
+                qrText={qrText(it)}
+                qrSizePx={Math.min(labelH, labelW) * 3.2}
+                showSpecies={showSpecies}
+              />
             </div>
           ))}
         </div>
@@ -218,7 +386,17 @@ export function SpecimenPrintClient({ items, defaultMode, defaultSize }: Props) 
   );
 }
 
-function LabelInner({ item, qrText, qrSizePx }: { item: LabelItem; qrText: string; qrSizePx: number }) {
+function LabelInner({
+  item,
+  qrText,
+  qrSizePx,
+  showSpecies,
+}: {
+  item: LabelItem;
+  qrText: string;
+  qrSizePx: number;
+  showSpecies: boolean;
+}) {
   const inactive = item.status !== "active";
   return (
     <div className="label-inner">
@@ -226,6 +404,11 @@ function LabelInner({ item, qrText, qrSizePx }: { item: LabelItem; qrText: strin
         <SpecimenQrCode text={qrText} sizePx={Math.max(48, Math.floor(qrSizePx))} ecc="M" />
       </div>
       <div className="text">
+        {showSpecies && item.species_ko && (
+          <div className="species" title={item.species_sci ?? undefined}>
+            {item.species_ko}
+          </div>
+        )}
         <div className="code">{item.human_code}</div>
         <div className={`meta ${inactive ? "status-bad" : ""}`}>
           {item.type_label}

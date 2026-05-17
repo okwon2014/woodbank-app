@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { SPECIMEN_TYPES, type Specimen, type SpecimenTypeCode } from "@/types/db";
-import { SpecimenPrintClient } from "@/components/SpecimenPrintClient";
+import { SPECIMEN_TYPES, type SpecimenTypeCode } from "@/types/db";
+import { SpecimenPrintClient, type LabelItem } from "@/components/SpecimenPrintClient";
 
 export const dynamic = "force-dynamic";
 
@@ -12,55 +11,62 @@ interface SP {
   size?: string;  // 단일 라벨 크기, "WxH" in mm. 예: "50x30"
 }
 
+// 시편 1건 row → LabelItem (species/sample_no/type 한글명 join 포함)
+function toLabelItem(s: any): LabelItem {
+  const t = SPECIMEN_TYPES.find((x) => x.code === (s.type_code as SpecimenTypeCode));
+  const ev = s.root_event ?? null;
+  const tree = ev?.tree ?? null;
+  const sp = tree?.species ?? null;
+  return {
+    id: s.id,
+    human_code: s.human_code,
+    type_code: s.type_code,
+    type_label: `${t?.ko ?? s.specimen_type} (${s.type_code})`,
+    status: s.status,
+    species_ko: sp?.ko_name ?? null,
+    species_sci: sp?.sci_name ?? null,
+    species_code: tree?.species_code ?? null,
+    sample_no: ev?.sample_no ?? null,
+  };
+}
+
+const SELECT = `
+  id, human_code, type_code, specimen_type, status,
+  root_event:sampling_events!inner(
+    sample_no,
+    tree:trees!inner(
+      species_code,
+      species:species(ko_name, sci_name)
+    )
+  )
+`;
+
 export default async function SpecimenPrintPage(props: { searchParams: Promise<SP> }) {
   const sp = await props.searchParams;
   const sb = await getSupabaseServer();
 
-  let specimens: Specimen[] = [];
+  let initialItems: LabelItem[] = [];
   if (sp.event) {
     const { data } = await sb
       .from("specimens")
-      .select("*")
+      .select(SELECT)
       .eq("root_event_id", sp.event)
       .order("created_at", { ascending: true });
-    specimens = (data as Specimen[]) ?? [];
+    initialItems = ((data as any[]) ?? []).map(toLabelItem);
   } else if (sp.ids) {
     const idList = sp.ids.split(",").map((s) => s.trim()).filter(Boolean);
     if (idList.length > 0) {
-      const { data } = await sb.from("specimens").select("*").in("id", idList);
-      specimens = (data as Specimen[]) ?? [];
+      const { data } = await sb.from("specimens").select(SELECT).in("id", idList);
+      initialItems = ((data as any[]) ?? []).map(toLabelItem);
     }
-  }
-
-  if (specimens.length === 0) {
-    return (
-      <div className="space-y-3">
-        <h1 className="text-xl font-bold">라벨 인쇄</h1>
-        <p className="text-sm text-stone-500">
-          인쇄할 시편이 없습니다. <Link href="/sites" className="underline">조사지점</Link> 또는
-          야장 상세 페이지의 「🏷 라벨 인쇄」 에서 시작하세요.
-        </p>
-      </div>
-    );
   }
 
   const mode: "a4" | "single" = sp.mode === "single" ? "single" : "a4";
   const size = parseSize(sp.size ?? "50x30");
 
-  // 종류·코드 한글 매핑 (서버에서 미리 join 해 client 에 가볍게 전달)
-  const items = specimens.map((s) => {
-    const t = SPECIMEN_TYPES.find((x) => x.code === (s.type_code as SpecimenTypeCode));
-    return {
-      id: s.id,
-      human_code: s.human_code,
-      type_label: `${t?.ko ?? s.specimen_type} (${s.type_code})`,
-      status: s.status,
-    };
-  });
-
   return (
     <SpecimenPrintClient
-      items={items}
+      initialItems={initialItems}
       defaultMode={mode}
       defaultSize={size}
     />
