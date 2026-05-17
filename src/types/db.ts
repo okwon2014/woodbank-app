@@ -71,7 +71,7 @@ export interface PhotoMeta {
   uploaded_at: string;
 }
 
-export type SpecimenTypeCode = "D" | "C" | "B" | "L" | "T" | "F" | "X" | "R" | "O";
+export type SpecimenTypeCode = "D" | "C" | "B" | "L" | "T" | "F" | "X" | "R" | "N" | "A" | "I" | "O";
 export type SpecimenStatus = "active" | "consumed" | "lost" | "destroyed";
 
 export interface SpecimenType {
@@ -83,6 +83,8 @@ export interface SpecimenType {
 }
 
 // 시편 종류 마스터 — 마이그레이션 007 의 분류와 동일하게 유지.
+// DB 에는 specimen_type/type_code 에 CHECK 제약이 없어 코드 레벨에서만 관리한다.
+// N(DNA)/A(DART)/I(NIR) 은 현장 채취 단계에서 1차 시편으로도 등록 가능.
 export const SPECIMEN_TYPES: SpecimenType[] = [
   { code: "D", key: "disc",      ko: "디스크",      en: "Disc",       description: "줄기 또는 가지를 가로로 잘라낸 원판" },
   { code: "C", key: "core",      ko: "증분코어",    en: "Core",       description: "Increment borer 등으로 채취한 막대형 시추" },
@@ -92,6 +94,9 @@ export const SPECIMEN_TYPES: SpecimenType[] = [
   { code: "F", key: "fiber",     ko: "해리 섬유",   en: "Fiber",      description: "해리된 단섬유 표본" },
   { code: "X", key: "extract",   ko: "추출물",      en: "Extract",    description: "DNA·화학 추출물" },
   { code: "R", key: "residue",   ko: "잔여 보존",   en: "Residue",    description: "분석 후 남은 보관용" },
+  { code: "N", key: "dna",       ko: "DNA 시료",    en: "DNA Sample", description: "현장에서 채취한 잎/캠비움 등 DNA 추출용 원시료" },
+  { code: "A", key: "dart",      ko: "DART 분석용", en: "DART",       description: "DART-MS 분석을 위해 분취한 시편" },
+  { code: "I", key: "nir",       ko: "NIR 분석용",  en: "NIR",        description: "근적외선(NIR) 분광 분석을 위해 분취한 시편" },
   { code: "O", key: "other",     ko: "기타",        en: "Other",      description: "위에 없는 분류" },
 ];
 
