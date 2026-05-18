@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/guard";
+import { getCurrentUserAndRole } from "@/lib/auth/role";
 import { fetchEventsForExport } from "@/lib/export/fetch";
+import { fetchComprehensive } from "@/lib/export/comprehensive";
 import { ExportControls } from "@/components/ExportControls";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +11,14 @@ interface SP { species?: string; sigungu?: string; from?: string; to?: string; q
 
 export default async function ExportPage(props: { searchParams: Promise<SP> }) {
   const searchParams = await props.searchParams;
-  await requireRole(["admin", "lead"]);
+  // PR #32 이후 내부 사용자 read 전면 개방 — surveyor 도 export 가능.
+  await requireRole(["admin", "lead", "surveyor"]);
+  const { role } = await getCurrentUserAndRole();
 
-  const events = await fetchEventsForExport(searchParams);
+  const [events, comprehensive] = await Promise.all([
+    fetchEventsForExport(searchParams),
+    fetchComprehensive(searchParams),
+  ]);
 
   const qs = new URLSearchParams();
   Object.entries(searchParams).forEach(([k, v]) => { if (v) qs.set(k, v as string); });
@@ -19,10 +26,12 @@ export default async function ExportPage(props: { searchParams: Promise<SP> }) {
 
   return (
     <div className="space-y-4">
-      <Link href="/admin" className="text-sm text-stone-500 hover:underline">← 관리자 대시보드</Link>
-      <h1 className="text-xl font-bold">야장 일괄 다운로드</h1>
+      {role === "admin" && (
+        <Link href="/admin" className="text-sm text-stone-500 hover:underline">← 관리자 대시보드</Link>
+      )}
+      <h1 className="text-xl font-bold">데이터 내보내기</h1>
       <p className="text-sm text-stone-500">
-        야장 목록의 필터를 적용한 결과를 Excel / Word / PDF로 한 번에 받습니다. 다른 필터를 적용하려면 「야장 목록 → 필터」에서 조정한 뒤 「내보내기」 버튼을 다시 클릭하세요.
+        야장 목록의 필터를 적용한 결과를 다양한 포맷으로 다운로드합니다. 다른 필터를 적용하려면 「야장 목록 → 필터」에서 조정한 뒤 「내보내기」 버튼을 다시 클릭하세요.
       </p>
 
       {Object.values(searchParams).some(Boolean) && (
@@ -36,7 +45,7 @@ export default async function ExportPage(props: { searchParams: Promise<SP> }) {
         </div>
       )}
 
-      <ExportControls events={events} printHref={printHref} />
+      <ExportControls events={events} printHref={printHref} comprehensive={comprehensive} />
 
       <details className="text-xs text-stone-600">
         <summary className="cursor-pointer">미리보기 (앞 20건)</summary>

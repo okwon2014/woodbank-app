@@ -5,15 +5,19 @@ import { downloadExcel } from "@/lib/export/excel";
 import { downloadDocx } from "@/lib/export/docx";
 import { downloadCsv } from "@/lib/export/csv";
 import { buildExportZipFromEvents, downloadBlob } from "@/lib/export/zip";
+import { downloadComprehensiveExcel } from "@/lib/export/comprehensive-excel";
 import type { EventExport } from "@/lib/export/types";
+import type { ComprehensiveBundle } from "@/lib/export/comprehensive";
 
 interface Props {
   events: EventExport[];
   printHref: string;
+  /** 종합 Excel 용 사전 fetch 번들. 없으면 종합 버튼 비활성. */
+  comprehensive?: ComprehensiveBundle;
 }
 
-export function ExportControls({ events, printHref }: Props) {
-  const [busy, setBusy] = useState<"" | "excel" | "csv" | "docx" | "pdf" | "zip">("");
+export function ExportControls({ events, printHref, comprehensive }: Props) {
+  const [busy, setBusy] = useState<"" | "excel" | "csv" | "docx" | "pdf" | "zip" | "comp">("");
   const [progress, setProgress] = useState<string>("");
 
   const ts = new Date().toISOString().slice(0, 10);
@@ -66,6 +70,20 @@ export function ExportControls({ events, printHref }: Props) {
     window.open(printHref, "_blank");
   }
 
+  async function onComprehensive() {
+    if (!comprehensive) return;
+    setBusy("comp");
+    setProgress("종합 Excel 생성 중…");
+    try {
+      await downloadComprehensiveExcel(comprehensive, `woodbank_종합_${ts}.xlsx`);
+    } catch (e: any) {
+      alert(e?.message ?? "종합 Excel 생성 실패");
+    } finally {
+      setBusy("");
+      setProgress("");
+    }
+  }
+
   async function onZip() {
     if (events.length === 0) return alert("내보낼 항목이 없습니다.");
     setBusy("zip");
@@ -97,14 +115,45 @@ export function ExportControls({ events, printHref }: Props) {
         <b>{events.length}</b>건이 선택되어 있습니다.
       </div>
 
+      {/* 종합 Excel — 가장 prominent. 다중 시트 (야장/시편/사진/DNA/지점/개체목 + 통계 4종 + 메타). */}
+      {comprehensive && (
+        <div className="rounded-lg border-2 border-brand-700 bg-brand-50/40 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <div className="text-sm font-bold text-brand-700">📊 종합 Excel (다중 시트)</div>
+              <div className="text-xs text-stone-600 mt-0.5">
+                야장·시편·사진·DNA 결과·지점·개체목 + 수종/시군구/시편 종류/월별 통계 + 메타. 모든 작업자·시각(KST) 포함.
+              </div>
+            </div>
+            <button
+              onClick={onComprehensive}
+              disabled={busy !== "" || comprehensive.events.length === 0}
+              className="btn-primary shrink-0"
+            >
+              {busy === "comp" ? "생성 중…" : "⬇ 종합 Excel 다운로드"}
+            </button>
+          </div>
+          <div className="text-[11px] text-stone-500">
+            행 수: 야장 {comprehensive.events.length} / 시편 {comprehensive.specimens.length} /
+            사진 {comprehensive.photos.length} / DNA {comprehensive.dnaResults.length} /
+            지점 {comprehensive.sites.length} / 개체목 {comprehensive.trees.length}
+            {Object.entries(comprehensive.meta.truncated).some(([, v]) => v) && (
+              <span className="ml-2 text-amber-700">⚠ 일부 시트 상한 초과 — 필터로 좁히세요</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="text-xs text-stone-500">아래는 야장 단일 시트 형식 (기존 호환).</div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <button onClick={onExcel} disabled={disabled} className="btn-primary">
-          {busy === "excel" ? "생성 중…" : "📊 Excel (.xlsx)"}
+        <button onClick={onExcel} disabled={disabled} className="btn-secondary">
+          {busy === "excel" ? "생성 중…" : "📊 Excel 야장만 (1시트)"}
         </button>
-        <button onClick={() => onDocx(true)} disabled={disabled} className="btn-primary">
+        <button onClick={() => onDocx(true)} disabled={disabled} className="btn-secondary">
           {busy === "docx" ? "생성 중…" : "📄 Word (사진 포함)"}
         </button>
-        <button onClick={onPdf} disabled={disabled} className="btn-primary">
+        <button onClick={onPdf} disabled={disabled} className="btn-secondary">
           🖨 PDF (인쇄)
         </button>
       </div>

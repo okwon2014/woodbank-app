@@ -9,6 +9,7 @@ const NAV = [
   { href: "/events/new", label: "+ 새 야장" },
   { href: "/stats", label: "통계" },
   { href: "/specimens/print", label: "🏷 라벨 인쇄" },
+  { href: "/admin/export", label: "📤 내보내기" },
   { href: "/queue", label: "동기화 큐" },
 ];
 
