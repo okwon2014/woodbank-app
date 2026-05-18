@@ -43,6 +43,7 @@
    10. `supabase/migrations/010_normalize_sync_status.sql`
    11. `supabase/migrations/011_dna_backfill_to_specimens.sql`
    12. `supabase/migrations/012_open_internal_read.sql`
+   13. `supabase/migrations/013_admin_users_with_auth_meta.sql`
 3. **Storage** → `photos` 버킷이 생성되었는지 확인. (003 스크립트가 자동 생성)
 4. **Project Settings → API** 에서 다음 두 값을 복사:
    - `Project URL` → `.env.local` 의 `NEXT_PUBLIC_SUPABASE_URL`
