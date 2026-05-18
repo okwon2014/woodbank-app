@@ -17,10 +17,10 @@ export default async function AdminPage() {
     sb.from("users_meta").select("*", { count: "exact", head: true }).eq("role", "guest"),
   ]);
 
-  const { data: users } = await sb
-    .from("users_meta")
-    .select("id, display_name, role, organization, active, updated_at")
-    .order("updated_at", { ascending: false });
+  // admin_users_with_email RPC — auth.users.last_sign_in_at 까지 같이 가져옴
+  // (마이그레이션 013 적용 필요). RPC 내부에서 admin 권한 재확인 + 정렬은
+  // last_sign_in_at desc nulls last.
+  const { data: users } = await sb.rpc("admin_users_with_email");
 
   return (
     <div className="space-y-6">
@@ -67,16 +67,31 @@ export default async function AdminPage() {
                 <th className="text-left p-2">역할</th>
                 <th className="text-left p-2">소속</th>
                 <th className="text-left p-2">활성</th>
-                <th className="text-left p-2">최근</th>
+                <th className="text-left p-2">최근 접속</th>
+                <th className="text-left p-2">가입</th>
+                <th className="text-left p-2">메타 수정</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
-              {(users ?? []).map((u) => (
+              {((users ?? []) as Array<{
+                id: string;
+                display_name: string | null;
+                role: string;
+                organization: string | null;
+                active: boolean;
+                updated_at: string;
+                last_sign_in_at: string | null;
+                auth_created_at: string | null;
+              }>).map((u) => (
                 <tr key={u.id}>
                   <td className="p-2">{u.display_name ?? "-"}</td>
                   <td className="p-2 uppercase">{u.role}</td>
                   <td className="p-2">{u.organization ?? "-"}</td>
                   <td className="p-2">{u.active ? "✓" : "✗"}</td>
+                  <td className="p-2 text-xs text-stone-700">
+                    {u.last_sign_in_at ? fmtDateTimeKst(u.last_sign_in_at) : <span className="text-stone-400 italic">없음</span>}
+                  </td>
+                  <td className="p-2 text-xs text-stone-500">{fmtDateTimeKst(u.auth_created_at)}</td>
                   <td className="p-2 text-xs text-stone-500">{fmtDateTimeKst(u.updated_at)}</td>
                 </tr>
               ))}
@@ -84,7 +99,9 @@ export default async function AdminPage() {
           </table>
         </div>
         <p className="text-xs text-stone-500 mt-2">
-          ※ 사용자 추가·역할 변경은 Supabase 대시보드 또는 별도 화면에서 처리 (본 페이지는 read-only).
+          ※ <b>최근 접속</b> = Supabase 가 보존하는 마지막 로그인 시각(`auth.users.last_sign_in_at`).
+          PWA 의 장기 세션은 갱신되지 않을 수 있어 실제 활동보다 빠를 수 있습니다. <b>접속 히스토리는 따로 기록되지 않습니다.</b>{" "}
+          <b>메타 수정</b> = `users_meta` 행 마지막 변경 시각 (역할/소속 변경 등).
         </p>
       </section>
     </div>

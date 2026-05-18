@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
+import { fmtDateTimeKst } from "@/lib/utils";
 import type { UserRole } from "@/types/db";
 
 interface UserRow {
@@ -12,6 +13,10 @@ interface UserRow {
   organization: string | null;
   active: boolean;
   updated_at: string;
+  // 마이그레이션 013 이후 추가 — 미적용 환경에선 undefined 로 들어와 안전.
+  last_sign_in_at?: string | null;
+  email_confirmed_at?: string | null;
+  auth_created_at?: string | null;
 }
 
 interface Assignment {
@@ -135,6 +140,7 @@ export function UserManager() {
               <th className="text-left p-2">역할</th>
               <th className="text-left p-2">소속</th>
               <th className="text-left p-2">활성</th>
+              <th className="text-left p-2">최근 접속</th>
               <th className="text-left p-2">지역</th>
             </tr>
           </thead>
@@ -166,6 +172,9 @@ export function UserManager() {
                         onChange={(e) => toggleActive(u.id, e.target.checked)}
                       />
                     </td>
+                    <td className="p-2 text-xs text-stone-600 whitespace-nowrap">
+                      {u.last_sign_in_at ? fmtDateTimeKst(u.last_sign_in_at) : <span className="text-stone-400 italic">없음</span>}
+                    </td>
                     <td className="p-2">
                       <button
                         className="text-xs underline"
@@ -177,7 +186,7 @@ export function UserManager() {
                   </tr>
                   {isOpen && (
                     <tr key={u.id + "-exp"} className="bg-stone-50">
-                      <td colSpan={6} className="p-3">
+                      <td colSpan={7} className="p-3">
                         <RegionAssignmentEditor
                           user={u}
                           assignments={userAssignments}
